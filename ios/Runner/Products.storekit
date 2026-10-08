@@ -1,0 +1,94 @@
+{
+  "identifier" : "DEZURA_NITTOU",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+
+  ],
+  "settings" : {
+    "_failTransactionsEnabled" : false,
+    "_locale" : "ja_JP",
+    "_storefront" : "JPN",
+    "_storeKitErrors" : [
+
+    ]
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "D3A10E201CF9000F007C117D",
+      "localizations" : [
+        {
+          "description" : "職人・現場の数と過去の月、PDF・CSV出力が使えます。",
+          "displayName" : "出面・日当くん Premium",
+          "locale" : "ja"
+        }
+      ],
+      "name" : "出面・日当くん Premium",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "100",
+          "familyShareable" : false,
+          "groupNumber" : 2,
+          "internalID" : "D3A10E211CF9000F007C117D",
+          "introductoryOffer" : {
+            "internalID" : "D3A10E231CF9000F007C117D",
+            "paymentMode" : "free",
+            "subscriptionPeriod" : "P1W"
+          },
+          "localizations" : [
+            {
+              "description" : "職人・現場が無制限、過去の月とPDF・CSV出力が使えます。",
+              "displayName" : "プレミアム（月額）",
+              "locale" : "ja"
+            }
+          ],
+          "productID" : "jp.dezura.app.premium.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Premium Monthly",
+          "subscriptionGroupID" : "D3A10E201CF9000F007C117D",
+          "type" : "RecurringSubscription"
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "1200",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "D3A10E221CF9000F007C117D",
+          "introductoryOffer" : {
+            "internalID" : "D3A10E241CF9000F007C117D",
+            "paymentMode" : "free",
+            "subscriptionPeriod" : "P1W"
+          },
+          "localizations" : [
+            {
+              "description" : "職人・現場が無制限、過去の月とPDF・CSV出力が使えます。",
+              "displayName" : "プレミアム（年額）",
+              "locale" : "ja"
+            }
+          ],
+          "productID" : "jp.dezura.app.premium.yearly",
+          "recurringSubscriptionPeriod" : "P1Y",
+          "referenceName" : "Premium Yearly",
+          "subscriptionGroupID" : "D3A10E201CF9000F007C117D",
+          "type" : "RecurringSubscription"
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 3,
+    "minor" : 0
+  }
+}
