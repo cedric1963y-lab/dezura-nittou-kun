@@ -72,7 +72,7 @@ App Store Connect に貼るための文案です。このリポジトリに置�
 - グループ: 出面・日当くん Premium
 - jp.dezura.app.premium.monthly（Premium Monthly / 1か月 / ¥100）
 - jp.dezura.app.premium.yearly（Premium Yearly / 1年 / ¥1,200）
-- 両方に導入オファー「1週間無料」を Connect で設定済み（グループ ID 22452773、App Apple ID 6820335056）。アプリ内の文言は、無料体験の有無どちらでも正しい書き方にしてある（期間は Apple の購入画面に出る）。
+- 両方に導入オファー「1週間無料」を Connect で設定済み（グループ ID 22452773、App Apple ID 6820335056）。アプリの購入画面は、無料体験の対象の Apple ID にだけ「1週間無料」と表示する（StoreKit 2 の対象判定を使用）。
 
 ## 審査メモの下書き
 
