@@ -68,6 +68,7 @@ ThemeData buildTheme() {
       }),
     ),
     dividerColor: AppColors.line,
+    dividerTheme: const DividerThemeData(color: AppColors.line, thickness: 1),
     floatingActionButtonTheme: const FloatingActionButtonThemeData(
       backgroundColor: AppColors.amber,
       foregroundColor: AppColors.ink,

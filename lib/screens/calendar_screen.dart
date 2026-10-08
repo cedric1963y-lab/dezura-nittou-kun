@@ -239,7 +239,7 @@ class _MonthGrid extends StatelessWidget {
   }
 
   Widget _cell(int dayNumber, int column, int days) {
-    if (dayNumber < 1 || dayNumber > days) return const SizedBox(height: 54);
+    if (dayNumber < 1 || dayNumber > days) return const SizedBox(height: 48);
     final date = DateTime(month.year, month.month, dayNumber);
     final isSelected = isSameDay(date, selected);
     final isToday = isSameDay(date, today);
@@ -260,7 +260,7 @@ class _MonthGrid extends StatelessWidget {
           borderRadius: BorderRadius.circular(10),
           onTap: () => onSelect(date),
           child: Container(
-            height: 50,
+            height: 44,
             decoration: isToday && !isSelected
                 ? BoxDecoration(
                     borderRadius: BorderRadius.circular(10),
@@ -280,7 +280,7 @@ class _MonthGrid extends StatelessWidget {
                         : color,
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 1),
                 if (units > 0)
                   Container(
                     padding: const EdgeInsets.symmetric(

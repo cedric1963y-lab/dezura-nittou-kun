@@ -46,8 +46,8 @@ flutter test
 
 ```sh
 tool/seed_demo_data.py "$(xcrun simctl get_app_container booted jp.dezura.app data)/Documents"
-flutter run -d <sim> --dart-define=SCREENSHOT_PREMIUM=true --dart-define=SCREENSHOT_TAB=0
+flutter run -d <sim> --dart-define=SCREENSHOT=true --dart-define=SCREENSHOT_PREMIUM=true --dart-define=SCREENSHOT_TAB=0
 xcrun simctl io booted screenshot ~/Downloads/dezura-screenshots-raw/01-calendar.png
 ```
 
-`SCREENSHOT_TAB`: 0 出面 / 1 集計 / 10 出力（PDF プレビュー）/ 11 プレミアム。リリースビルドでは無視される。
+`SCREENSHOT_TAB`: 0 出面 / 1 集計 / 10 出力（PDF プレビュー）/ 11 プレミアム。`SCREENSHOT=true` のときは日本の価格（¥100 / ¥1,200、1週間無料）を表示する撮影用の購入ゲートウェイを使い、購入はしない。リリースビルドではどれも無視される。まとめて撮るときは `tool/capture_app_store_screenshots.sh`。

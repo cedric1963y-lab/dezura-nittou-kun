@@ -42,11 +42,16 @@ class StoreProduct {
     required this.id,
     required this.priceLabel,
     required this.title,
+    this.trialLabel,
   });
 
   final String id;
   final String priceLabel;
   final String title;
+
+  /// For example `1週間`. Set only when the App Store says this Apple ID can
+  /// still get the introductory free trial.
+  final String? trialLabel;
 }
 
 class StoreSubscription {

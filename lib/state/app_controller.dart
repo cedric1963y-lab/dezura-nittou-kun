@@ -65,6 +65,14 @@ class AppController extends ChangeNotifier {
     return PlanLimits.priceLabelFor(productId);
   }
 
+  /// `1週間` when the App Store offers this Apple ID the free trial.
+  String? trialFor(String productId) {
+    for (final product in storeProducts) {
+      if (product.id == productId) return product.trialLabel;
+    }
+    return null;
+  }
+
   Future<void> load() async {
     await repository.init();
     workers = await repository.loadWorkers();

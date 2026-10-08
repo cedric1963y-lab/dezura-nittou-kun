@@ -13,6 +13,9 @@ abstract final class PlanLimits {
   static const yearlyPriceLabel = '¥1,200';
   static const bundleId = 'jp.dezura.app';
 
+  /// Introductory offer set in App Store Connect for both products.
+  static const freeTrialLabel = '1週間';
+
   static const premiumProductIds = {monthlyProductId, yearlyProductId};
 
   static bool isPremiumProduct(String productId) {

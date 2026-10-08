@@ -8,13 +8,15 @@ import 'package:path_provider/path_provider.dart';
 import 'app_shell.dart';
 import 'data/repository.dart';
 import 'plan/limits.dart';
+import 'services/screenshot_purchase_gateway.dart';
 import 'services/store_purchase_gateway.dart';
 import 'state/app_controller.dart';
 import 'theme.dart';
 
 /// Debug builds only, for App Store screenshots of the live UI:
-/// `flutter run --dart-define=SCREENSHOT_PREMIUM=true --dart-define=SCREENSHOT_TAB=1`.
+/// `flutter run --dart-define=SCREENSHOT=true --dart-define=SCREENSHOT_PREMIUM=true --dart-define=SCREENSHOT_TAB=1`.
 /// Release builds ignore both.
+const _screenshot = bool.fromEnvironment('SCREENSHOT');
 const _screenshotPremium = bool.fromEnvironment('SCREENSHOT_PREMIUM');
 const _screenshotTab = int.fromEnvironment('SCREENSHOT_TAB');
 
@@ -51,8 +53,10 @@ class _BootAppState extends State<BootApp> {
       );
       final controller = AppController(
         repository: repository,
-        purchases: StorePurchaseGateway(),
-        demoPremium: kDebugMode && _screenshotPremium,
+        purchases: kDebugMode && _screenshot
+            ? ScreenshotPurchaseGateway()
+            : StorePurchaseGateway(),
+        demoPremium: kDebugMode && _screenshot && _screenshotPremium,
       );
       await controller.load();
       if (!mounted) {
@@ -78,7 +82,7 @@ class _BootAppState extends State<BootApp> {
     if (controller != null) {
       return AppShell(
         controller: controller,
-        startTab: kDebugMode ? _screenshotTab : 0,
+        startTab: kDebugMode && _screenshot ? _screenshotTab : 0,
       );
     }
     return MaterialApp(

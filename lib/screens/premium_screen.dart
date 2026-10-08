@@ -109,7 +109,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
             const SizedBox(height: 14),
           ],
           const Text(
-            '人数も現場も、上限なしで集計。',
+            '人数も現場も、上限なし。',
             style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.w800,
@@ -134,6 +134,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
             name: '月額プラン',
             price: controller.priceFor(PlanLimits.monthlyProductId),
             period: '/ 1か月（自動更新）',
+            trial: controller.trialFor(PlanLimits.monthlyProductId),
             emphasized: true,
             child: FilledButton(
               key: const Key('buy-monthly'),
@@ -146,6 +147,8 @@ class _PremiumScreenState extends State<PremiumScreen> {
                   : Text(
                       _current(controller, PlanLimits.monthlyProductId)
                           ? '月額を契約中'
+                          : controller.trialFor(PlanLimits.monthlyProductId) != null
+                          ? '${controller.trialFor(PlanLimits.monthlyProductId)}無料で月額をはじめる'
                           : '月額ではじめる',
                     ),
             ),
@@ -155,6 +158,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
             name: '年額プラン',
             price: controller.priceFor(PlanLimits.yearlyProductId),
             period: '/ 1年（自動更新）',
+            trial: controller.trialFor(PlanLimits.yearlyProductId),
             emphasized: false,
             child: OutlinedButton(
               key: const Key('buy-yearly'),
@@ -165,13 +169,15 @@ class _PremiumScreenState extends State<PremiumScreen> {
               child: Text(
                 _current(controller, PlanLimits.yearlyProductId)
                     ? '年額を契約中'
+                    : controller.trialFor(PlanLimits.yearlyProductId) != null
+                    ? '${controller.trialFor(PlanLimits.yearlyProductId)}無料で年額をはじめる'
                     : '年額ではじめる',
               ),
             ),
           ),
           const SizedBox(height: 14),
           const Text(
-            'お支払いは購入の確定時にApple IDへ請求されます。無料体験がある場合は、その期間と終了後の料金がAppleの購入画面に表示され、無料期間が終わると課金が始まります。サブスクリプションは、現在の期間が終わる24時間以上前に解約しない限り、同じ期間・同じ価格で自動更新され、終了前の24時間以内に更新料が請求されます。管理と解約はiPhoneの「設定」> Apple ID >「サブスクリプション」から行えます。',
+            'お支払いは購入の確定時にApple IDへ請求されます。無料体験の対象の場合は、無料期間の終了時に課金が始まり、終了の24時間以上前に解約すれば請求されません。サブスクリプションは、現在の期間が終わる24時間以上前に解約しない限り、同じ期間・同じ価格で自動更新され、終了前の24時間以内に更新料が請求されます。管理と解約はiPhoneの「設定」> Apple ID >「サブスクリプション」から行えます。',
             style: TextStyle(color: AppColors.muted, fontSize: 12.5, height: 1.5),
           ),
           if (controller.purchaseError != null) ...[
@@ -239,11 +245,13 @@ class _PlanCard extends StatelessWidget {
     required this.period,
     required this.emphasized,
     required this.child,
+    this.trial,
   });
 
   final String name;
   final String price;
   final String period;
+  final String? trial;
   final bool emphasized;
   final Widget child;
 
@@ -281,6 +289,14 @@ class _PlanCard extends StatelessWidget {
               Text(period, style: const TextStyle(color: AppColors.muted)),
             ],
           ),
+          if (trial != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                'はじめての方は$trial無料。無料期間が終わると$priceで自動更新されます。',
+                style: const TextStyle(fontSize: 13, height: 1.4),
+              ),
+            ),
           const SizedBox(height: 10),
           SizedBox(width: double.infinity, child: child),
         ],

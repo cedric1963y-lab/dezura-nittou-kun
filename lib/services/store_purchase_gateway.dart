@@ -79,18 +79,30 @@ class StorePurchaseGateway implements PurchaseGateway {
     for (final details in response.productDetails) {
       _products[details.id] = details;
     }
-    return [
-      for (final id in [
-        PlanLimits.monthlyProductId,
-        PlanLimits.yearlyProductId,
-      ])
-        if (_products[id] != null)
-          StoreProduct(
-            id: id,
-            priceLabel: _products[id]!.price,
-            title: _products[id]!.title,
-          ),
-    ];
+    final result = <StoreProduct>[];
+    for (final id in [PlanLimits.monthlyProductId, PlanLimits.yearlyProductId]) {
+      final details = _products[id];
+      if (details == null) continue;
+      result.add(
+        StoreProduct(
+          id: id,
+          priceLabel: details.price,
+          title: details.title,
+          trialLabel: await _trialEligible(id)
+              ? PlanLimits.freeTrialLabel
+              : null,
+        ),
+      );
+    }
+    return result;
+  }
+
+  Future<bool> _trialEligible(String productId) async {
+    try {
+      return await SK2Product.isIntroductoryOfferEligible(productId);
+    } catch (_) {
+      return false;
+    }
   }
 
   @override
