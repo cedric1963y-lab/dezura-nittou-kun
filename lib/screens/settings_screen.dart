@@ -121,7 +121,7 @@ class SettingsScreen extends StatelessWidget {
           controller: text,
           autofocus: true,
           maxLength: 30,
-          decoration: const InputDecoration(hintText: '例: 鈴木工業'),
+          decoration: const InputDecoration(hintText: '例: 山田工業'),
         ),
         actions: [
           TextButton(

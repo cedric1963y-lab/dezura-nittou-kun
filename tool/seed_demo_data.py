@@ -18,8 +18,8 @@ today = dt.date.today()
 created = int(dt.datetime(today.year, today.month, 1).timestamp() * 1000) - 86400000 * 40
 
 workers = [
-    ("w1", "鈴木 隼人", 20000, 2800),
-    ("w2", "山田 太郎", 18000, 2500),
+    ("w1", "山田 太郎", 20000, 2800),
+    ("w2", "田中 一郎", 18000, 2500),
     ("w3", "佐藤 健", 16000, 2200),
     ("w4", "高橋 翔", 13000, 1800),
 ]
@@ -71,6 +71,6 @@ write("workers.json", {"version": 1, "workers": [
 write("sites.json", {"version": 1, "sites": [
     {"id": s, "name": n, "note": note, "createdAt": created} for s, n, note in sites]})
 write("records.json", {"version": 1, "records": records})
-write("settings.json", {"version": 1, "selectedSiteId": "s1", "businessName": "鈴木工業"})
+write("settings.json", {"version": 1, "selectedSiteId": "s1", "businessName": "山田工業"})
 write("entitlement.json", {"version": 1})
 print(f"wrote {len(records)} records to {root}")
