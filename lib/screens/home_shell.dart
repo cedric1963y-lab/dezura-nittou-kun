@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../app_scope.dart';
+import '../services/review_prompt.dart';
 import 'calendar_screen.dart';
 import 'export_screen.dart';
 import 'premium_screen.dart';
@@ -50,7 +52,18 @@ class _HomeShellState extends State<HomeShell> {
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
-        onDestinationSelected: (value) => setState(() => _index = value),
+        onDestinationSelected: (value) {
+          setState(() => _index = value);
+          if (value == 1) {
+            final controller = AppScope.of(context);
+            final now = controller.now;
+            ReviewPrompt.afterSummaryViewed(
+              hasEntries: !controller
+                  .summaryFor(DateTime(now.year, now.month))
+                  .isEmpty,
+            );
+          }
+        },
         destinations: const [
           NavigationDestination(
             key: Key('tab-calendar'),

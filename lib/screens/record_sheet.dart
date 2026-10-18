@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app_scope.dart';
 import '../format.dart';
 import '../models/records.dart';
+import '../services/review_prompt.dart';
 import '../theme.dart';
 import '../widgets/dialogs.dart';
 
@@ -184,6 +185,7 @@ class _RecordSheetState extends State<_RecordSheet> {
                           overtimeHours: _overtime,
                         ),
                       );
+                      if (ok) ReviewPrompt.afterEntry(controller.records.length);
                       if (ok && context.mounted) Navigator.pop(context);
                     },
               child: const Text('保存'),
