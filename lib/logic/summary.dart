@@ -53,7 +53,8 @@ class MonthSummary {
   final List<DayRecord> records;
 
   double get units => workers.fold(0, (sum, w) => sum + w.units);
-  double get overtimeHours => workers.fold(0, (sum, w) => sum + w.overtimeHours);
+  double get overtimeHours =>
+      workers.fold(0, (sum, w) => sum + w.overtimeHours);
   int get amount => workers.fold(0, (sum, w) => sum + w.amount);
   int get workingDays => records.map((r) => r.day).toSet().length;
   bool get isEmpty => records.isEmpty;
@@ -73,17 +74,19 @@ MonthSummary summarizeMonth({
     for (var i = 0; i < workers.length; i++) workers[i].id: i,
   };
   final siteById = {for (final s in sites) s.id: s};
-  final inMonth = [
-    for (final r in records)
-      if (r.day.startsWith(prefix) &&
-          workerOrder.containsKey(r.workerId) &&
-          siteById.containsKey(r.siteId))
-        r,
-  ]..sort((a, b) {
-      final byDay = a.day.compareTo(b.day);
-      if (byDay != 0) return byDay;
-      return workerOrder[a.workerId]!.compareTo(workerOrder[b.workerId]!);
-    });
+  final inMonth =
+      [
+        for (final r in records)
+          if (r.day.startsWith(prefix) &&
+              tryParseDayKey(r.day) != null &&
+              workerOrder.containsKey(r.workerId) &&
+              siteById.containsKey(r.siteId))
+            r,
+      ]..sort((a, b) {
+        final byDay = a.day.compareTo(b.day);
+        if (byDay != 0) return byDay;
+        return workerOrder[a.workerId]!.compareTo(workerOrder[b.workerId]!);
+      });
 
   final workerTotals = <WorkerTotal>[];
   for (final worker in workers) {
@@ -97,7 +100,8 @@ MonthSummary summarizeMonth({
         overtimeHours: mine.fold(0, (sum, r) => sum + r.overtimeHours),
         amount: mine.fold(0, (sum, r) => sum + r.amount),
         unitsByDay: {
-          for (final r in mine) parseDayKey(r.day).day: r.units,
+          for (final r in mine)
+            if (tryParseDayKey(r.day) case final date?) date.day: r.units,
         },
       ),
     );
@@ -146,7 +150,9 @@ String summaryAsText(MonthSummary summary) {
     ..writeln()
     ..writeln('■ 現場別');
   for (final s in summary.sites) {
-    b.writeln('${s.site.name}　${formatUnits(s.units)}人工　${formatYen(s.amount)}');
+    b.writeln(
+      '${s.site.name}　${formatUnits(s.units)}人工　${formatYen(s.amount)}',
+    );
   }
   b
     ..writeln('―――――――――')
@@ -164,8 +170,7 @@ String summaryAsText(MonthSummary summary) {
 String summaryAsCsv(MonthSummary summary) {
   final names = {for (final w in summary.workers) w.worker.id: w.worker.name};
   final siteNames = {for (final s in summary.sites) s.site.id: s.site.name};
-  final b = StringBuffer('\uFEFF')
-    ..writeln('日付,職人,現場,人工,残業時間,日当,残業単価,金額');
+  final b = StringBuffer('\uFEFF')..writeln('日付,職人,現場,人工,残業時間,日当,残業単価,金額');
   for (final r in summary.records) {
     b.writeln(
       [

@@ -71,9 +71,7 @@ class _RosterScreenState extends State<RosterScreen> {
 
   List<Widget> _workers(AppController controller) {
     if (controller.workers.isEmpty) {
-      return const [
-        Panel(child: Text('職人がまだいません。自分も1人として登録してください。')),
-      ];
+      return const [Panel(child: Text('職人がまだいません。自分も1人として登録してください。'))];
     }
     return [
       for (final w in controller.workers)
@@ -86,7 +84,7 @@ class _RosterScreenState extends State<RosterScreen> {
               leading: CircleAvatar(
                 backgroundColor: AppColors.amberSoft,
                 foregroundColor: AppColors.navy,
-                child: Text(w.name.characters.first),
+                child: Text(nameInitial(w.name)),
               ),
               title: Text(
                 w.name,
@@ -201,9 +199,7 @@ class _RosterScreenState extends State<RosterScreen> {
     final ok = await confirmAction(
       context,
       title: '${w.name}を削除しますか？',
-      body: count == 0
-          ? '名簿から外します。'
-          : 'この人の出面$count件も一緒に消えます。元に戻せません。',
+      body: count == 0 ? '名簿から外します。' : 'この人の出面$count件も一緒に消えます。元に戻せません。',
       confirmLabel: '削除',
     );
     if (!ok || !mounted) return;

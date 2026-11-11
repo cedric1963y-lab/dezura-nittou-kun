@@ -80,7 +80,10 @@ class StorePurchaseGateway implements PurchaseGateway {
       _products[details.id] = details;
     }
     final result = <StoreProduct>[];
-    for (final id in [PlanLimits.monthlyProductId, PlanLimits.yearlyProductId]) {
+    for (final id in [
+      PlanLimits.monthlyProductId,
+      PlanLimits.yearlyProductId,
+    ]) {
       final details = _products[id];
       if (details == null) continue;
       result.add(
@@ -112,14 +115,12 @@ class StorePurchaseGateway implements PurchaseGateway {
     }
     if (!await _store.isAvailable()) {
       throw const StoreUnavailable(
-        'この端末ではApp Storeに接続できません。実機で、App Storeにサインインした状態でお試しください。',
+        'App Storeに接続できませんでした。通信状況とApp Storeへのサインインを確認してください。',
       );
     }
     final details = _products[productId] ?? await _query(productId);
     if (details == null) {
-      throw StoreUnavailable(
-        '商品が見つかりません。App Store Connect に「$productId」があるか確認してください。',
-      );
+      throw const StoreUnavailable(PlanLimits.productsUnavailableMessage);
     }
     // Auto-renewable subscriptions use the same StoreKit purchase call
     // as non-consumables in the in_app_purchase plugin.

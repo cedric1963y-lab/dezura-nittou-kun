@@ -131,18 +131,14 @@ class _CalendarScreenState extends State<CalendarScreen> {
                       controller.siteById(record.siteId)?.name ?? '',
                   showSite: (record) =>
                       record.siteId != controller.selectedSite?.id,
-                  onTap: () =>
-                      guard(context, () async {
+                  onTap: () => guard(context, () async {
                     final next = await controller.tapWorker(worker.id, day);
                     if (next != null) {
                       ReviewPrompt.afterEntry(controller.records.length);
                     }
                   }),
-                  onEdit: () => showRecordSheet(
-                    context,
-                    worker: worker,
-                    day: day,
-                  ),
+                  onEdit: () =>
+                      showRecordSheet(context, worker: worker, day: day),
                 ),
               ),
             const SizedBox(height: 4),
@@ -159,9 +155,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                       if (!context.mounted) return;
                       showSnack(
                         context,
-                        added == 0
-                            ? '全員すでに付いています。'
-                            : '$added人を1人工で付けました。',
+                        added == 0 ? '全員すでに付いています。' : '$added人を1人工で付けました。',
                       );
                     }),
                     icon: const Icon(Icons.done_all),
@@ -173,7 +167,11 @@ class _CalendarScreenState extends State<CalendarScreen> {
             const SizedBox(height: 10),
             const Text(
               'タップで「1人工 → 半日 → 取消」。現場の変更や残業は右の「…」から。',
-              style: TextStyle(color: AppColors.muted, fontSize: 13, height: 1.4),
+              style: TextStyle(
+                color: AppColors.muted,
+                fontSize: 13,
+                height: 1.4,
+              ),
             ),
           ],
         ],
@@ -269,7 +267,9 @@ class _MonthGrid extends StatelessWidget {
           borderRadius: BorderRadius.circular(10),
           onTap: () => onSelect(date),
           child: Container(
-            height: 44,
+            constraints: const BoxConstraints(minHeight: 44),
+            padding: const EdgeInsets.symmetric(vertical: 3),
+            alignment: Alignment.center,
             decoration: isToday && !isSelected
                 ? BoxDecoration(
                     borderRadius: BorderRadius.circular(10),
@@ -277,6 +277,7 @@ class _MonthGrid extends StatelessWidget {
                   )
                 : null,
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
@@ -290,8 +291,14 @@ class _MonthGrid extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 1),
-                if (units > 0)
-                  Container(
+                // Same size with or without a badge, so every cell in a row
+                // grows together when the text size is large.
+                Visibility(
+                  visible: units > 0,
+                  maintainSize: true,
+                  maintainAnimation: true,
+                  maintainState: true,
+                  child: Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 5,
                       vertical: 1,
@@ -301,16 +308,16 @@ class _MonthGrid extends StatelessWidget {
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
-                      formatUnits(units),
+                      units > 0 ? formatUnits(units) : '0',
+                      maxLines: 1,
                       style: const TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w800,
                         color: AppColors.ink,
                       ),
                     ),
-                  )
-                else
-                  const SizedBox(height: 15),
+                  ),
+                ),
               ],
             ),
           ),
@@ -452,10 +459,12 @@ class _WorkerTile extends StatelessWidget {
             children: [
               CircleAvatar(
                 radius: 20,
-                backgroundColor: r == null ? AppColors.paper : AppColors.amberSoft,
+                backgroundColor: r == null
+                    ? AppColors.paper
+                    : AppColors.amberSoft,
                 foregroundColor: AppColors.navy,
                 child: Text(
-                  worker.name.characters.first,
+                  nameInitial(worker.name),
                   style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
               ),

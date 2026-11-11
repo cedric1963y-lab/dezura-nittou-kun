@@ -1,3 +1,5 @@
+import 'package:flutter/widgets.dart' show StringCharacters;
+
 const _weekdays = ['月', '火', '水', '木', '金', '土', '日'];
 
 /// Calendar day as `YYYY-MM-DD`. Records are keyed by this string so that a
@@ -12,7 +14,29 @@ String dayKey(DateTime value) {
 DateTime parseDayKey(String key) {
   final parts = key.split('-');
   if (parts.length != 3) throw FormatException('日付の形式が不正です: $key');
-  return DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+  return DateTime(
+    int.parse(parts[0]),
+    int.parse(parts[1]),
+    int.parse(parts[2]),
+  );
+}
+
+/// Null when [key] is not a real `YYYY-MM-DD` date. Such records are skipped.
+DateTime? tryParseDayKey(String key) {
+  final parts = key.split('-');
+  if (parts.length != 3) return null;
+  final y = int.tryParse(parts[0]);
+  final m = int.tryParse(parts[1]);
+  final d = int.tryParse(parts[2]);
+  if (y == null || m == null || d == null) return null;
+  if (m < 1 || m > 12 || d < 1 || d > DateTime(y, m + 1, 0).day) return null;
+  return DateTime(y, m, d);
+}
+
+/// First character for an avatar. `？` when the name is blank.
+String nameInitial(String name) {
+  final trimmed = name.trim();
+  return trimmed.isEmpty ? '？' : trimmed.characters.first;
 }
 
 /// `YYYY-MM` prefix shared by every [dayKey] in that month.

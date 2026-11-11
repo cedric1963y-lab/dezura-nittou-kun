@@ -16,6 +16,10 @@ abstract final class PlanLimits {
   /// Introductory offer set in App Store Connect for both products.
   static const freeTrialLabel = '1週間';
 
+  /// Shown on the paywall when the App Store sends no products.
+  static const productsUnavailableMessage =
+      '価格を読み込めませんでした。通信状況を確認してもう一度開いてください。';
+
   static const premiumProductIds = {monthlyProductId, yearlyProductId};
 
   static bool isPremiumProduct(String productId) {
@@ -37,10 +41,12 @@ abstract final class PlanLimits {
   static DateTime periodEnd(String productId, DateTime purchasedAt) {
     final local = purchasedAt.toLocal();
     final months = productId == yearlyProductId ? 12 : 1;
+    // Jan 31 + 1 month is the last day of February, not Mar 3.
+    final lastDay = DateTime(local.year, local.month + months + 1, 0).day;
     return DateTime(
       local.year,
       local.month + months,
-      local.day,
+      local.day > lastDay ? lastDay : local.day,
       local.hour,
       local.minute,
       local.second,

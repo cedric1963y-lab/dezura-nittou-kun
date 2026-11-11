@@ -41,6 +41,9 @@ class AppController extends ChangeNotifier {
   PurchasePhase purchasePhase = PurchasePhase.idle;
   String? purchaseError;
   List<StoreProduct> storeProducts = [];
+
+  /// False until the App Store has answered once on the paywall.
+  bool productsLoaded = false;
   String? _selectedSiteId;
   String businessName = '';
   ByteData? _font;
@@ -64,6 +67,10 @@ class AppController extends ChangeNotifier {
     }
     return PlanLimits.priceLabelFor(productId);
   }
+
+  /// True only when the App Store returned this product with its price.
+  bool hasProduct(String productId) =>
+      storeProducts.any((product) => product.id == productId);
 
   /// `1週間` when the App Store offers this Apple ID the free trial.
   String? trialFor(String productId) {
@@ -156,7 +163,8 @@ class AppController extends ChangeNotifier {
     final result = <int, double>{};
     for (final r in records) {
       if (!r.day.startsWith(prefix) || !known.contains(r.workerId)) continue;
-      final day = parseDayKey(r.day).day;
+      final day = tryParseDayKey(r.day)?.day;
+      if (day == null) continue;
       result[day] = (result[day] ?? 0) + r.units;
     }
     return result;
@@ -183,8 +191,9 @@ class AppController extends ChangeNotifier {
       overtimeRate: _yen(overtimeRate, '残業単価'),
       createdAt: _now(),
     );
-    workers = [...workers, worker];
-    await repository.saveWorkers(workers);
+    final next = [...workers, worker];
+    await repository.saveWorkers(next);
+    workers = next;
     notifyListeners();
     return worker;
   }
@@ -249,9 +258,10 @@ class AppController extends ChangeNotifier {
       note: _optionalLine(note, 40),
       createdAt: _now(),
     );
-    sites = [...sites, site];
+    final next = [...sites, site];
+    await repository.saveSites(next);
+    sites = next;
     _selectedSiteId = site.id;
-    await repository.saveSites(sites);
     await _saveSettings();
     notifyListeners();
     return site;
@@ -463,6 +473,7 @@ class AppController extends ChangeNotifier {
     } catch (_) {
       storeProducts = [];
     }
+    productsLoaded = true;
     notifyListeners();
   }
 

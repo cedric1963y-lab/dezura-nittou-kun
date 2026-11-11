@@ -48,9 +48,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
     if (!_wasPremium && controller.premium) {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
-        ..showSnackBar(
-          const SnackBar(content: Text('プレミアムが有効になりました。')),
-        );
+        ..showSnackBar(const SnackBar(content: Text('プレミアムが有効になりました。')));
     }
     _wasPremium = controller.premium;
   }
@@ -83,6 +81,10 @@ class _PremiumScreenState extends State<PremiumScreen> {
     final expires = controller.entitlement.expiresAt;
     final active = controller.entitlement.isActiveAt(controller.now);
     final reason = _reasonText;
+    final monthlyReady = controller.hasProduct(PlanLimits.monthlyProductId);
+    final yearlyReady = controller.hasProduct(PlanLimits.yearlyProductId);
+    final unavailable =
+        controller.productsLoaded && (!monthlyReady || !yearlyReady);
 
     return Scaffold(
       appBar: AppBar(title: const Text('プレミアム')),
@@ -130,16 +132,44 @@ class _PremiumScreenState extends State<PremiumScreen> {
             ),
           ],
           const SizedBox(height: 14),
+          if (unavailable) ...[
+            Container(
+              key: const Key('products-unavailable'),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.card,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.danger),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.wifi_off, color: AppColors.danger),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      PlanLimits.productsUnavailableMessage,
+                      style: TextStyle(height: 1.4),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
           _PlanCard(
             name: '月額プラン',
-            price: controller.priceFor(PlanLimits.monthlyProductId),
+            price: monthlyReady
+                ? controller.priceFor(PlanLimits.monthlyProductId)
+                : '—',
             period: '/ 1か月（自動更新）',
             trial: controller.trialFor(PlanLimits.monthlyProductId),
             emphasized: true,
             child: FilledButton(
               key: const Key('buy-monthly'),
               onPressed:
-                  pending || _current(controller, PlanLimits.monthlyProductId)
+                  pending ||
+                      !monthlyReady ||
+                      _current(controller, PlanLimits.monthlyProductId)
                   ? null
                   : () => controller.buyPlan(PlanLimits.monthlyProductId),
               child: pending
@@ -147,7 +177,8 @@ class _PremiumScreenState extends State<PremiumScreen> {
                   : Text(
                       _current(controller, PlanLimits.monthlyProductId)
                           ? '月額を契約中'
-                          : controller.trialFor(PlanLimits.monthlyProductId) != null
+                          : controller.trialFor(PlanLimits.monthlyProductId) !=
+                                null
                           ? '${controller.trialFor(PlanLimits.monthlyProductId)}無料で月額をはじめる'
                           : '月額ではじめる',
                     ),
@@ -156,14 +187,18 @@ class _PremiumScreenState extends State<PremiumScreen> {
           const SizedBox(height: 10),
           _PlanCard(
             name: '年額プラン',
-            price: controller.priceFor(PlanLimits.yearlyProductId),
+            price: yearlyReady
+                ? controller.priceFor(PlanLimits.yearlyProductId)
+                : '—',
             period: '/ 1年（自動更新）',
             trial: controller.trialFor(PlanLimits.yearlyProductId),
             emphasized: false,
             child: OutlinedButton(
               key: const Key('buy-yearly'),
               onPressed:
-                  pending || _current(controller, PlanLimits.yearlyProductId)
+                  pending ||
+                      !yearlyReady ||
+                      _current(controller, PlanLimits.yearlyProductId)
                   ? null
                   : () => controller.buyPlan(PlanLimits.yearlyProductId),
               child: Text(
@@ -178,7 +213,11 @@ class _PremiumScreenState extends State<PremiumScreen> {
           const SizedBox(height: 14),
           const Text(
             'お支払いは購入の確定時にApple IDへ請求されます。無料体験の対象の場合は、無料期間の終了時に課金が始まり、終了の24時間以上前に解約すれば請求されません。サブスクリプションは、現在の期間が終わる24時間以上前に解約しない限り、同じ期間・同じ価格で自動更新され、終了前の24時間以内に更新料が請求されます。管理と解約はiPhoneの「設定」> Apple ID >「サブスクリプション」から行えます。',
-            style: TextStyle(color: AppColors.muted, fontSize: 12.5, height: 1.5),
+            style: TextStyle(
+              color: AppColors.muted,
+              fontSize: 12.5,
+              height: 1.5,
+            ),
           ),
           if (controller.purchaseError != null) ...[
             const SizedBox(height: 12),
@@ -320,7 +359,10 @@ class _Benefit extends StatelessWidget {
           const Icon(Icons.check_circle, color: AppColors.amber, size: 22),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(text, style: const TextStyle(fontSize: 16, height: 1.35)),
+            child: Text(
+              text,
+              style: const TextStyle(fontSize: 16, height: 1.35),
+            ),
           ),
         ],
       ),
