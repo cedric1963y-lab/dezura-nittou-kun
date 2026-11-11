@@ -52,6 +52,13 @@ void main() {
     if (await directory.exists()) await directory.delete(recursive: true);
   });
 
+  test('settings version matches pubspec', () {
+    final pubspec = File('pubspec.yaml').readAsStringSync();
+    final match = RegExp(r'^version: ([0-9.]+)\+', multiLine: true)
+        .firstMatch(pubspec)!;
+    expect(AppInfo.version, match.group(1));
+  });
+
   group('periodEnd stays in the next month', () {
     test('Jan 31 monthly -> Feb 28', () {
       final end = PlanLimits.periodEnd(
