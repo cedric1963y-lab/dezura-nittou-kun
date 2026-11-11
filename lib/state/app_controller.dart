@@ -180,14 +180,20 @@ class AppController extends ChangeNotifier {
 
   Future<Worker> addWorker({
     required String name,
-    required int dayRate,
+    int dayRate = 0,
     int overtimeRate = 0,
+    PayType payType = PayType.daily,
+    int hourlyRate = 0,
+    int monthlySalary = 0,
   }) async {
     if (!canAddWorker) throw const LimitReached(LimitKind.workers);
     final worker = Worker(
       id: createId(),
       name: _requiredLine(name, '名前', 20),
+      payType: payType,
       dayRate: _yen(dayRate, '日当'),
+      hourlyRate: _yen(hourlyRate, '時給'),
+      monthlySalary: _salary(monthlySalary),
       overtimeRate: _yen(overtimeRate, '残業単価'),
       createdAt: _now(),
     );
@@ -203,14 +209,21 @@ class AppController extends ChangeNotifier {
   Future<void> updateWorker({
     required String id,
     required String name,
-    required int dayRate,
+    int? dayRate,
     int overtimeRate = 0,
+    PayType? payType,
+    int? hourlyRate,
+    int? monthlySalary,
   }) async {
     final index = workers.indexWhere((w) => w.id == id);
     if (index < 0) throw const InvalidInput('職人が見つかりません。');
-    final updated = workers[index].copyWith(
+    final current = workers[index];
+    final updated = current.copyWith(
       name: _requiredLine(name, '名前', 20),
-      dayRate: _yen(dayRate, '日当'),
+      payType: payType,
+      dayRate: _yen(dayRate ?? current.dayRate, '日当'),
+      hourlyRate: _yen(hourlyRate ?? current.hourlyRate, '時給'),
+      monthlySalary: _salary(monthlySalary ?? current.monthlySalary),
       overtimeRate: _yen(overtimeRate, '残業単価'),
     );
     workers = [...workers]..[index] = updated;
@@ -219,8 +232,12 @@ class AppController extends ChangeNotifier {
       for (final r in records)
         if (r.workerId == id && r.day.compareTo(from) >= 0)
           r.copyWith(
+            payType: updated.payType,
             dayRate: updated.dayRate,
+            hourlyRate: updated.hourlyRate,
+            monthlySalary: updated.monthlySalary,
             overtimeRate: updated.overtimeRate,
+            hours: r.hours > 0 ? r.hours : r.units * defaultWorkHours,
           )
         else
           r,
@@ -319,17 +336,16 @@ class AppController extends ChangeNotifier {
     if (current == null) {
       final site = selectedSite;
       if (site == null) throw const InvalidInput('先に現場を登録してください。');
-      next = DayRecord(
-        workerId: workerId,
-        day: dayKey(day),
-        siteId: site.id,
-        units: 1,
-        overtimeHours: 0,
-        dayRate: worker.dayRate,
-        overtimeRate: worker.overtimeRate,
-      );
+      next = newRecord(worker, dayKey(day), site.id);
     } else if (current.units >= 1) {
-      next = current.copyWith(units: 0.5);
+      // Half day: an hourly worker's default 8h becomes 4h. Hours the user
+      // typed in are kept.
+      next = current.copyWith(
+        units: 0.5,
+        hours: current.hours == defaultWorkHours
+            ? defaultWorkHours / 2
+            : current.hours,
+      );
     } else {
       next = null;
     }
@@ -337,12 +353,32 @@ class AppController extends ChangeNotifier {
     return next;
   }
 
+  /// A full day (1人工) for [worker] with its current pay type and rates.
+  static DayRecord newRecord(Worker worker, String day, String siteId) {
+    return DayRecord(
+      workerId: worker.id,
+      day: day,
+      siteId: siteId,
+      units: 1,
+      overtimeHours: 0,
+      payType: worker.payType,
+      hours: worker.payType == PayType.hourly ? defaultWorkHours : 0,
+      dayRate: worker.dayRate,
+      hourlyRate: worker.hourlyRate,
+      monthlySalary: worker.monthlySalary,
+      overtimeRate: worker.overtimeRate,
+    );
+  }
+
+  /// [hours] is the working time of an hourly worker (0.5〜24h). Other pay
+  /// types ignore it.
   Future<void> setRecord({
     required String workerId,
     required DateTime day,
     required String siteId,
     required double units,
     required double overtimeHours,
+    double? hours,
   }) async {
     final worker = workerById(workerId);
     if (worker == null) throw const InvalidInput('職人が見つかりません。');
@@ -355,17 +391,22 @@ class AppController extends ChangeNotifier {
       throw const InvalidInput('残業は0〜12時間で入力してください。');
     }
     final existing = recordFor(workerId, day);
+    final base = existing ?? newRecord(worker, dayKey(day), siteId);
+    var workHours = 0.0;
+    if (base.payType == PayType.hourly) {
+      workHours = hours ?? units * defaultWorkHours;
+      if (workHours < 0.5 || workHours > 24) {
+        throw const InvalidInput('勤務時間は0.5〜24時間で入力してください。');
+      }
+    }
     await _replace(
       workerId,
       day,
-      DayRecord(
-        workerId: workerId,
-        day: dayKey(day),
+      base.copyWith(
         siteId: siteId,
         units: units,
         overtimeHours: overtimeHours,
-        dayRate: existing?.dayRate ?? worker.dayRate,
-        overtimeRate: existing?.overtimeRate ?? worker.overtimeRate,
+        hours: workHours,
       ),
     );
   }
@@ -384,17 +425,7 @@ class AppController extends ChangeNotifier {
     final added = <DayRecord>[];
     for (final w in workers) {
       if (recordFor(w.id, day) != null) continue;
-      added.add(
-        DayRecord(
-          workerId: w.id,
-          day: key,
-          siteId: site.id,
-          units: 1,
-          overtimeHours: 0,
-          dayRate: w.dayRate,
-          overtimeRate: w.overtimeRate,
-        ),
-      );
+      added.add(newRecord(w, key, site.id));
     }
     if (added.isEmpty) return 0;
     records = [...records, ...added];
@@ -579,6 +610,13 @@ class AppController extends ChangeNotifier {
     final text = collapseWhitespace(input);
     if (text.length > max) throw InvalidInput('$max文字までにしてください。');
     return text;
+  }
+
+  int _salary(int value) {
+    if (value < 0 || value > 10000000) {
+      throw const InvalidInput('月給は0〜10,000,000円で入力してください。');
+    }
+    return value;
   }
 
   int _yen(int value, String label) {

@@ -434,7 +434,8 @@ class _WorkerTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final r = record;
     final details = <String>[
-      '日当 ${formatYen(worker.dayRate)}',
+      payLabel(worker),
+      if (r != null && r.payType == PayType.hourly) formatHours(r.hours),
       if (r != null && r.overtimeHours > 0) '残業${formatHours(r.overtimeHours)}',
       if (r != null && showSite(r)) siteName(r),
     ];
@@ -604,6 +605,9 @@ class _SetupCard extends StatelessWidget {
                     name: draft.name,
                     dayRate: draft.dayRate,
                     overtimeRate: draft.overtimeRate,
+                    payType: draft.payType,
+                    hourlyRate: draft.hourlyRate,
+                    monthlySalary: draft.monthlySalary,
                   ),
                 );
               },

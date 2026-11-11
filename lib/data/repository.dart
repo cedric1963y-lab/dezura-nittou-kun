@@ -15,6 +15,12 @@ class Repository {
 
   static const _encoder = JsonEncoder.withIndent('  ');
 
+  /// Version written to workers.json and records.json. 2 adds the pay type
+  /// (日当・時給・月給). Version 1 files (1.0.4 and earlier) are still read;
+  /// a missing pay type means 日当.
+  static const listSchemaVersion = 2;
+  static const _readableVersions = {1, 2};
+
   String get exportDirectory => p.join(root.path, 'exports');
 
   Future<void> init() async {
@@ -99,7 +105,10 @@ class Repository {
     String key,
     List<Map<String, dynamic>> items,
   ) {
-    return _atomicWrite(name, _encoder.convert({'version': 1, key: items}));
+    return _atomicWrite(
+      name,
+      _encoder.convert({'version': listSchemaVersion, key: items}),
+    );
   }
 
   Future<Map<String, dynamic>?> _readObject(String name) async {
@@ -113,7 +122,7 @@ class Repository {
     }
     final json = Map<String, dynamic>.from(decoded);
     final version = json['version'];
-    if (version != 1) {
+    if (!_readableVersions.contains(version)) {
       throw FormatException('未対応の保存データです（version: $version）。');
     }
     return json;

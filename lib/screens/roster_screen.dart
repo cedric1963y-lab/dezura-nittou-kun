@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app_scope.dart';
 import '../errors.dart';
 import '../format.dart';
+import '../models/records.dart';
 import '../plan/limits.dart';
 import '../state/app_controller.dart';
 import '../theme.dart';
@@ -92,7 +93,7 @@ class _RosterScreenState extends State<RosterScreen> {
               ),
               subtitle: Text(
                 [
-                  '日当 ${formatYen(w.dayRate)}',
+                  payLabel(w),
                   if (w.overtimeRate > 0) '残業 ${formatYen(w.overtimeRate)}/h',
                 ].join('・'),
               ),
@@ -164,6 +165,9 @@ class _RosterScreenState extends State<RosterScreen> {
         name: draft.name,
         dayRate: draft.dayRate,
         overtimeRate: draft.overtimeRate,
+        payType: draft.payType,
+        hourlyRate: draft.hourlyRate,
+        monthlySalary: draft.monthlySalary,
       ),
     );
   }
@@ -178,7 +182,10 @@ class _RosterScreenState extends State<RosterScreen> {
       initialName: w.name,
       initialDayRate: w.dayRate,
       initialOvertimeRate: w.overtimeRate,
-      note: '日当・残業単価の変更は、今月1日以降の出面に反映されます。先月までの金額は変わりません。',
+      initialPayType: w.payType,
+      initialHourlyRate: w.hourlyRate,
+      initialMonthlySalary: w.monthlySalary,
+      note: '給与の形・単価の変更は、今月1日以降の出面に反映されます。先月までの金額は変わりません。',
     );
     if (draft == null || !mounted) return;
     await guard(
@@ -188,6 +195,9 @@ class _RosterScreenState extends State<RosterScreen> {
         name: draft.name,
         dayRate: draft.dayRate,
         overtimeRate: draft.overtimeRate,
+        payType: draft.payType,
+        hourlyRate: draft.hourlyRate,
+        monthlySalary: draft.monthlySalary,
       ),
     );
   }

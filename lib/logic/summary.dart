@@ -9,9 +9,22 @@ class WorkerTotal {
     required this.overtimeHours,
     required this.amount,
     required this.unitsByDay,
+    this.payType = PayType.daily,
+    this.hours = 0,
+    this.salary = 0,
   });
 
   final Worker worker;
+
+  /// Pay type of this worker's records in the month (the latest one if it
+  /// was changed during the month).
+  final PayType payType;
+
+  /// Working hours of hourly records.
+  final double hours;
+
+  /// 月給 counted once for the month. Already included in [amount].
+  final int salary;
 
   /// Days with any record (a half day counts as one day here).
   final int days;
@@ -56,6 +69,10 @@ class MonthSummary {
   double get overtimeHours =>
       workers.fold(0, (sum, w) => sum + w.overtimeHours);
   int get amount => workers.fold(0, (sum, w) => sum + w.amount);
+
+  /// 月給 in [amount]. Site totals do not include it.
+  int get salaryTotal => workers.fold(0, (sum, w) => sum + w.salary);
+  bool get hasMonthly => workers.any((w) => w.payType == PayType.monthly);
   int get workingDays => records.map((r) => r.day).toSet().length;
   bool get isEmpty => records.isEmpty;
 }
@@ -92,13 +109,21 @@ MonthSummary summarizeMonth({
   for (final worker in workers) {
     final mine = inMonth.where((r) => r.workerId == worker.id).toList();
     if (mine.isEmpty) continue;
+    final monthly = mine.where((r) => r.payType == PayType.monthly);
+    // Once per month, whatever the attendance. No proration.
+    final salary = monthly.isEmpty ? 0 : monthly.last.monthlySalary;
     workerTotals.add(
       WorkerTotal(
         worker: worker,
+        payType: mine.last.payType,
+        hours: mine
+            .where((r) => r.payType == PayType.hourly)
+            .fold(0, (sum, r) => sum + r.hours),
+        salary: salary,
         days: mine.map((r) => r.day).toSet().length,
         units: mine.fold(0, (sum, r) => sum + r.units),
         overtimeHours: mine.fold(0, (sum, r) => sum + r.overtimeHours),
-        amount: mine.fold(0, (sum, r) => sum + r.amount),
+        amount: mine.fold(salary, (sum, r) => sum + r.amount),
         unitsByDay: {
           for (final r in mine)
             if (tryParseDayKey(r.day) case final date?) date.day: r.units,
@@ -143,7 +168,8 @@ String summaryAsText(MonthSummary summary) {
   for (final w in summary.workers) {
     final ot = w.overtimeHours > 0 ? ' 残業${formatHours(w.overtimeHours)}' : '';
     b.writeln(
-      '${w.worker.name}　${formatUnits(w.units)}人工（${w.days}日）$ot　${formatYen(w.amount)}',
+      // 日当 lines read exactly as before 1.0.5.
+      '${w.worker.name}${w.payType == PayType.daily ? '' : '（${w.payType.label}）'}　${workerDetail(w)}$ot　${formatYen(w.amount)}',
     );
   }
   b
@@ -154,6 +180,7 @@ String summaryAsText(MonthSummary summary) {
       '${s.site.name}　${formatUnits(s.units)}人工　${formatYen(s.amount)}',
     );
   }
+  if (summary.hasMonthly) b.writeln(monthlySiteNote);
   b
     ..writeln('―――――――――')
     ..writeln(
@@ -165,12 +192,24 @@ String summaryAsText(MonthSummary summary) {
   return b.toString().trimRight();
 }
 
+/// `3人工（3日）`, `24h（3日）` or `出勤3日（3人工）` by pay type.
+String workerDetail(WorkerTotal w) => switch (w.payType) {
+  PayType.daily => '${formatUnits(w.units)}人工（${w.days}日）',
+  PayType.hourly => '${formatHours(w.hours)}（${w.days}日）',
+  PayType.monthly => '出勤${w.days}日（${formatUnits(w.units)}人工）',
+};
+
+/// Shown under the per-site totals when a 月給 worker is in the month.
+const monthlySiteNote = '※月給は現場別の金額に含みません（人工のみ数えます）';
+
 /// UTF-8 CSV with one row per record. Starts with a BOM so Excel on Windows
 /// opens the Japanese correctly.
 String summaryAsCsv(MonthSummary summary) {
   final names = {for (final w in summary.workers) w.worker.id: w.worker.name};
   final siteNames = {for (final s in summary.sites) s.site.id: s.site.name};
-  final b = StringBuffer('\uFEFF')..writeln('日付,職人,現場,人工,残業時間,日当,残業単価,金額');
+  // The first 8 columns are the same as 1.0.4, so existing sheets still work.
+  final b = StringBuffer('\uFEFF')
+    ..writeln('日付,職人,現場,人工,残業時間,日当,残業単価,金額,区分,勤務時間,時給');
   for (final r in summary.records) {
     b.writeln(
       [
@@ -179,14 +218,35 @@ String summaryAsCsv(MonthSummary summary) {
         _csv(siteNames[r.siteId] ?? ''),
         formatUnits(r.units),
         formatUnits(r.overtimeHours),
-        r.dayRate,
+        r.payType == PayType.daily ? r.dayRate : '',
         r.overtimeRate,
         r.amount,
+        r.payType.label,
+        r.payType == PayType.hourly ? formatUnits(r.hours) : '',
+        r.payType == PayType.hourly ? r.hourlyRate : '',
+      ].join(','),
+    );
+  }
+  for (final w in summary.workers) {
+    if (w.salary == 0) continue;
+    b.writeln(
+      [
+        monthKey(summary.month),
+        _csv(w.worker.name),
+        '',
+        '',
+        '',
+        '',
+        '',
+        w.salary,
+        '月給',
+        '',
+        '',
       ].join(','),
     );
   }
   b.writeln(
-    '合計,,,${formatUnits(summary.units)},${formatUnits(summary.overtimeHours)},,,${summary.amount}',
+    '合計,,,${formatUnits(summary.units)},${formatUnits(summary.overtimeHours)},,,${summary.amount},,,',
   );
   return b.toString();
 }

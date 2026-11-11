@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app_scope.dart';
 import '../errors.dart';
 import '../format.dart';
+import '../models/records.dart';
 import '../logic/summary.dart';
 import '../services/share_service.dart';
 import '../state/app_controller.dart';
@@ -89,8 +90,8 @@ class _SummaryScreenState extends State<SummaryScreen> {
                 _Row(
                   title: summary.workers[i].worker.name,
                   detail: [
-                    '${formatUnits(summary.workers[i].units)}人工',
-                    '${summary.workers[i].days}日',
+                    summary.workers[i].payType.label,
+                    workerDetail(summary.workers[i]),
                     if (summary.workers[i].overtimeHours > 0)
                       '残業${formatHours(summary.workers[i].overtimeHours)}',
                   ].join('・'),
@@ -118,6 +119,15 @@ class _SummaryScreenState extends State<SummaryScreen> {
             ],
           ),
         ),
+        if (summary.hasMonthly)
+          const Padding(
+            padding: EdgeInsets.only(top: 6),
+            child: Text(
+              monthlySiteNote,
+              key: Key('monthly-site-note'),
+              style: TextStyle(color: AppColors.muted, fontSize: 12),
+            ),
+          ),
       ],
       const SizedBox(height: 18),
       Builder(
@@ -167,7 +177,9 @@ class _TotalCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '${summary.month.month}月の日当合計',
+            summary.workers.every((w) => w.payType == PayType.daily)
+                ? '${summary.month.month}月の日当合計'
+                : '${summary.month.month}月の支払合計',
             style: const TextStyle(color: Colors.white70, fontSize: 14),
           ),
           const SizedBox(height: 2),

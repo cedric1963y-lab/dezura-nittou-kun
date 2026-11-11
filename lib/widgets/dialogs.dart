@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../errors.dart';
 import '../format.dart';
+import '../models/records.dart';
 import '../screens/premium_screen.dart';
 import '../theme.dart';
 
@@ -69,10 +70,16 @@ class WorkerDraft {
     required this.name,
     required this.dayRate,
     required this.overtimeRate,
+    this.payType = PayType.daily,
+    this.hourlyRate = 0,
+    this.monthlySalary = 0,
   });
 
   final String name;
+  final PayType payType;
   final int dayRate;
+  final int hourlyRate;
+  final int monthlySalary;
   final int overtimeRate;
 }
 
@@ -83,6 +90,9 @@ Future<WorkerDraft?> showWorkerDialog(
   String initialName = '',
   int? initialDayRate,
   int initialOvertimeRate = 0,
+  PayType initialPayType = PayType.daily,
+  int initialHourlyRate = 0,
+  int initialMonthlySalary = 0,
   String? note,
 }) {
   return showDialog<WorkerDraft>(
@@ -91,7 +101,12 @@ Future<WorkerDraft?> showWorkerDialog(
       title: title,
       saveLabel: saveLabel,
       initialName: initialName,
-      initialDayRate: initialDayRate,
+      initialRates: {
+        PayType.daily: initialDayRate,
+        PayType.hourly: initialHourlyRate == 0 ? null : initialHourlyRate,
+        PayType.monthly: initialMonthlySalary == 0 ? null : initialMonthlySalary,
+      },
+      initialPayType: initialPayType,
       initialOvertimeRate: initialOvertimeRate,
       note: note,
     ),
@@ -103,7 +118,8 @@ class _WorkerDialog extends StatefulWidget {
     required this.title,
     required this.saveLabel,
     required this.initialName,
-    required this.initialDayRate,
+    required this.initialRates,
+    required this.initialPayType,
     required this.initialOvertimeRate,
     required this.note,
   });
@@ -111,7 +127,8 @@ class _WorkerDialog extends StatefulWidget {
   final String title;
   final String saveLabel;
   final String initialName;
-  final int? initialDayRate;
+  final Map<PayType, int?> initialRates;
+  final PayType initialPayType;
   final int initialOvertimeRate;
   final String? note;
 
@@ -121,39 +138,68 @@ class _WorkerDialog extends StatefulWidget {
 
 class _WorkerDialogState extends State<_WorkerDialog> {
   late final _name = TextEditingController(text: widget.initialName);
-  late final _rate = TextEditingController(
-    text: widget.initialDayRate?.toString() ?? '',
-  );
+  late final _rates = {
+    for (final type in PayType.values)
+      type: TextEditingController(
+        text: widget.initialRates[type]?.toString() ?? '',
+      ),
+  };
   late final _overtime = TextEditingController(
     text: widget.initialOvertimeRate == 0
         ? ''
         : widget.initialOvertimeRate.toString(),
   );
+  late PayType _payType = widget.initialPayType;
   String? _error;
+
+  static const _rateLabels = {
+    PayType.daily: '日当（1人工あたり）',
+    PayType.hourly: '時給（1時間あたり）',
+    PayType.monthly: '月給（1か月あたり）',
+  };
+  static const _rateHints = {
+    PayType.daily: '例: 18000',
+    PayType.hourly: '例: 1500',
+    PayType.monthly: '例: 300000',
+  };
 
   @override
   void dispose() {
     _name.dispose();
-    _rate.dispose();
+    for (final c in _rates.values) {
+      c.dispose();
+    }
     _overtime.dispose();
     super.dispose();
   }
 
+  int _rateOf(PayType type) =>
+      parseYen(_rates[type]!.text) ?? widget.initialRates[type] ?? 0;
+
   void _save() {
     final name = _name.text.trim();
-    final rate = parseYen(_rate.text);
+    final rate = parseYen(_rates[_payType]!.text);
     final overtime = parseYen(_overtime.text) ?? 0;
     if (name.isEmpty) {
       setState(() => _error = '名前を入力してください。');
       return;
     }
     if (rate == null) {
-      setState(() => _error = '日当を数字で入力してください。');
+      setState(() => _error = '${_payType.label}を数字で入力してください。');
       return;
     }
     Navigator.pop(
       context,
-      WorkerDraft(name: name, dayRate: rate, overtimeRate: overtime),
+      WorkerDraft(
+        name: name,
+        payType: _payType,
+        dayRate: _payType == PayType.daily ? rate : _rateOf(PayType.daily),
+        hourlyRate: _payType == PayType.hourly ? rate : _rateOf(PayType.hourly),
+        monthlySalary: _payType == PayType.monthly
+            ? rate
+            : _rateOf(PayType.monthly),
+        overtimeRate: overtime,
+      ),
     );
   }
 
@@ -180,15 +226,40 @@ class _WorkerDialogState extends State<_WorkerDialog> {
           ),
         ),
         const SizedBox(height: 12),
+        const Text('給与の形', style: TextStyle(fontWeight: FontWeight.w800)),
+        const SizedBox(height: 6),
+        SizedBox(
+          width: double.infinity,
+          child: SegmentedButton<PayType>(
+            key: const Key('worker-pay-type'),
+            segments: [
+              for (final type in PayType.values)
+                ButtonSegment(
+                  value: type,
+                  label: Text(type.label, key: Key('pay-${type.key}')),
+                ),
+            ],
+            selected: {_payType},
+            showSelectedIcon: false,
+            onSelectionChanged: (value) =>
+                setState(() => _payType = value.first),
+          ),
+        ),
+        const SizedBox(height: 12),
         TextField(
-          key: const Key('worker-rate'),
-          controller: _rate,
+          key: Key('worker-rate-${_payType.key}'),
+          controller: _rates[_payType],
           keyboardType: TextInputType.number,
           textInputAction: TextInputAction.next,
-          decoration: const InputDecoration(
-            labelText: '日当（1人工あたり）',
-            hintText: '例: 18000',
+          decoration: InputDecoration(
+            labelText: _rateLabels[_payType],
+            hintText: _rateHints[_payType],
             suffixText: '円',
+            helperText: switch (_payType) {
+              PayType.daily => '金額 = 人工 × 日当',
+              PayType.hourly => '金額 = 勤務時間 × 時給（1人工 = 8時間）',
+              PayType.monthly => '月給は出勤した月に1回だけ集計します',
+            },
           ),
         ),
         const SizedBox(height: 12),

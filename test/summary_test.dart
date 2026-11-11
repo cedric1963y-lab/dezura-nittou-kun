@@ -106,8 +106,8 @@ void main() {
     expect(csv.startsWith('\uFEFF日付,職人,現場,人工,残業時間,日当,残業単価,金額'), isTrue);
     final lines = csv.trim().split('\n');
     expect(lines.length, 1 + 5 + 1);
-    expect(lines[1], '2026-10-01,山田 太郎,港北倉庫改修,1,0,18000,2500,18000');
-    expect(lines.last, '合計,,,4,2,,,72500');
+    expect(lines[1], '2026-10-01,山田 太郎,港北倉庫改修,1,0,18000,2500,18000,日当,,');
+    expect(lines.last, '合計,,,4,2,,,72500,,,');
   });
 
   test('empty month', () {

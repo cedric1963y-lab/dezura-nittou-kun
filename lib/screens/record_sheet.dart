@@ -4,6 +4,7 @@ import '../app_scope.dart';
 import '../format.dart';
 import '../models/records.dart';
 import '../services/review_prompt.dart';
+import '../state/app_controller.dart';
 import '../theme.dart';
 import '../widgets/dialogs.dart';
 
@@ -34,6 +35,7 @@ class _RecordSheetState extends State<_RecordSheet> {
   String? _siteId;
   double _units = 1;
   double _overtime = 0;
+  double _hours = defaultWorkHours;
   bool _ready = false;
   bool _existing = false;
 
@@ -47,6 +49,7 @@ class _RecordSheetState extends State<_RecordSheet> {
     _siteId = record?.siteId ?? controller.selectedSite?.id;
     _units = record?.units ?? 1;
     _overtime = record?.overtimeHours ?? 0;
+    if (record != null && record.hours > 0) _hours = record.hours;
     _ready = true;
   }
 
@@ -54,10 +57,14 @@ class _RecordSheetState extends State<_RecordSheet> {
   Widget build(BuildContext context) {
     final controller = AppScope.of(context);
     final record = controller.recordFor(widget.worker.id, widget.day);
-    final dayRate = record?.dayRate ?? widget.worker.dayRate;
-    final overtimeRate = record?.overtimeRate ?? widget.worker.overtimeRate;
-    final amount =
-        (dayRate * _units).round() + (overtimeRate * _overtime).round();
+    final base =
+        record ??
+        AppController.newRecord(widget.worker, dayKey(widget.day), '');
+    final payType = base.payType;
+    final overtimeRate = base.overtimeRate;
+    final amount = base
+        .copyWith(units: _units, overtimeHours: _overtime, hours: _hours)
+        .amount;
 
     return SafeArea(
       child: Padding(
@@ -104,9 +111,55 @@ class _RecordSheetState extends State<_RecordSheet> {
               ],
               selected: {_units},
               showSelectedIcon: false,
-              onSelectionChanged: (value) =>
-                  setState(() => _units = value.first),
+              onSelectionChanged: (value) => setState(() {
+                final next = value.first;
+                // Keep the hours in step with a full or half day unless the
+                // user changed them.
+                if (_hours == _units * defaultWorkHours) {
+                  _hours = next * defaultWorkHours;
+                }
+                _units = next;
+              }),
             ),
+            if (payType == PayType.hourly) ...[
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      '勤務時間',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                  IconButton.outlined(
+                    key: const Key('hours-minus'),
+                    onPressed: _hours <= 0.5
+                        ? null
+                        : () => setState(() => _hours -= 0.5),
+                    icon: const Icon(Icons.remove),
+                  ),
+                  SizedBox(
+                    width: 72,
+                    child: Text(
+                      formatHours(_hours),
+                      key: const Key('hours-value'),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  IconButton.outlined(
+                    key: const Key('hours-plus'),
+                    onPressed: _hours >= 24
+                        ? null
+                        : () => setState(() => _hours += 0.5),
+                    icon: const Icon(Icons.add),
+                  ),
+                ],
+              ),
+            ],
             const SizedBox(height: 16),
             Row(
               children: [
@@ -156,7 +209,9 @@ class _RecordSheetState extends State<_RecordSheet> {
               color: AppColors.paper,
               child: Row(
                 children: [
-                  const Text('この日の金額'),
+                  Text(
+                    payType == PayType.monthly ? 'この日の残業代' : 'この日の金額',
+                  ),
                   const Spacer(),
                   Text(
                     formatYen(amount),
@@ -169,6 +224,14 @@ class _RecordSheetState extends State<_RecordSheet> {
                 ],
               ),
             ),
+            if (payType == PayType.monthly)
+              const Padding(
+                padding: EdgeInsets.only(top: 4),
+                child: Text(
+                  '月給の職人は出勤だけを記録します。月給は集計で月に1回計上します。',
+                  style: TextStyle(color: AppColors.muted, fontSize: 12),
+                ),
+              ),
             const SizedBox(height: 14),
             FilledButton(
               key: const Key('save-record'),
@@ -183,6 +246,7 @@ class _RecordSheetState extends State<_RecordSheet> {
                           siteId: _siteId!,
                           units: _units,
                           overtimeHours: _overtime,
+                          hours: payType == PayType.hourly ? _hours : null,
                         ),
                       );
                       if (ok) ReviewPrompt.afterEntry(controller.records.length);

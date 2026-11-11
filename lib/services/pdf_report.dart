@@ -5,6 +5,7 @@ import 'package:pdf/widgets.dart' as pw;
 
 import '../format.dart';
 import '../logic/summary.dart';
+import '../models/records.dart';
 
 const _navy = PdfColor.fromInt(0xFF1F3A57);
 const _amber = PdfColor.fromInt(0xFFF5A300);
@@ -243,21 +244,25 @@ pw.Widget _grid(MonthSummary summary, int days) {
 pw.Widget _workerTable(MonthSummary summary) {
   return _table(
     title: '職人別',
-    headers: const ['職人', '日数', '人工', '残業', '金額'],
+    headers: const ['職人', '区分', '日数', '人工', '時間', '残業', '金額'],
     rows: [
       for (final w in summary.workers)
         [
-          _clip(w.worker.name, 12),
+          _clip(w.worker.name, 10),
+          w.payType.label,
           '${w.days}日',
           formatUnits(w.units),
+          w.payType == PayType.hourly ? formatHours(w.hours) : '-',
           w.overtimeHours > 0 ? formatHours(w.overtimeHours) : '-',
           formatYen(w.amount),
         ],
     ],
     total: [
       '合計',
+      '',
       '${summary.workingDays}日',
       formatUnits(summary.units),
+      '',
       summary.overtimeHours > 0 ? formatHours(summary.overtimeHours) : '-',
       formatYen(summary.amount),
     ],
@@ -265,7 +270,7 @@ pw.Widget _workerTable(MonthSummary summary) {
 }
 
 pw.Widget _siteTable(MonthSummary summary) {
-  return _table(
+  final table = _table(
     title: '現場別',
     headers: const ['現場', '人数', '人工', '金額'],
     rows: [
@@ -278,6 +283,18 @@ pw.Widget _siteTable(MonthSummary summary) {
         ],
     ],
     total: null,
+  );
+  if (!summary.hasMonthly) return table;
+  return pw.Column(
+    crossAxisAlignment: pw.CrossAxisAlignment.start,
+    children: [
+      table,
+      pw.SizedBox(height: 4),
+      pw.Text(
+        monthlySiteNote,
+        style: const pw.TextStyle(color: _muted, fontSize: 7),
+      ),
+    ],
   );
 }
 
