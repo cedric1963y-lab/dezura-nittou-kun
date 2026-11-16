@@ -1,3 +1,5 @@
+import '../ids.dart';
+
 /// How a worker is paid. Files written before 1.0.5 have no pay type and
 /// are read as [daily].
 enum PayType {
@@ -21,13 +23,56 @@ enum PayType {
   }
 }
 
-/// `日当 ¥18,000`, `時給 ¥1,500` or `月給 ¥300,000`.
+/// Who the roster entry is. Files written before 1.0.6 have no kind and are
+/// read as [employee].
+enum WorkerKind {
+  employee('employee', '従業員'),
+  contractor('contractor', '外注');
+
+  const WorkerKind(this.key, this.label);
+
+  /// Stored in JSON. Never rename.
+  final String key;
+  final String label;
+
+  static WorkerKind fromKey(Object? raw) {
+    for (final kind in values) {
+      if (kind.key == raw) return kind;
+    }
+    return employee;
+  }
+}
+
+/// 昼 or 夜勤 of one entry. Files written before 1.0.6 are all 昼.
+enum Shift {
+  day('day', '昼'),
+  night('night', '夜勤');
+
+  const Shift(this.key, this.label);
+
+  /// Stored in JSON. Never rename.
+  final String key;
+  final String label;
+
+  static Shift fromKey(Object? raw) {
+    for (final shift in values) {
+      if (shift.key == raw) return shift;
+    }
+    return day;
+  }
+}
+
+/// Most 人工 one entry can hold (a 外注 crew).
+const maxUnitsPerRecord = 99.0;
+
+/// `日当 ¥18,000`, `時給 ¥1,500` or `月給 ¥300,000`. A 外注 paid per 人工 reads
+/// `単価 ¥18,000`.
 String payLabel(Worker worker) {
   final digits = worker.rate.toString().replaceAllMapped(
     RegExp(r'(\d)(?=(\d{3})+$)'),
     (m) => '${m[1]},',
   );
-  return '${worker.payType.label} ¥$digits';
+  return '${worker.payName} ¥$digits';
 }
 
 /// Working hours for one full day (1人工) of an hourly worker.
@@ -44,11 +89,21 @@ class Worker {
     this.payType = PayType.daily,
     this.hourlyRate = 0,
     this.monthlySalary = 0,
+    this.kind = WorkerKind.employee,
   });
 
   final String id;
   final String name;
   final PayType payType;
+
+  /// 従業員 or 外注（会社）.
+  final WorkerKind kind;
+
+  /// `日当`, `時給`, `月給`; `単価` for a 外注 paid per 人工.
+  String get payName =>
+      kind == WorkerKind.contractor && payType == PayType.daily
+      ? '単価'
+      : payType.label;
 
   /// 日当 in yen for one full day (1人工). Used when [payType] is daily.
   final int dayRate;
@@ -77,9 +132,11 @@ class Worker {
     PayType? payType,
     int? hourlyRate,
     int? monthlySalary,
+    WorkerKind? kind,
   }) {
     return Worker(
       id: id,
+      kind: kind ?? this.kind,
       name: name ?? this.name,
       dayRate: dayRate ?? this.dayRate,
       overtimeRate: overtimeRate ?? this.overtimeRate,
@@ -93,6 +150,7 @@ class Worker {
   Map<String, dynamic> toJson() => {
     'id': id,
     'name': name,
+    'kind': kind.key,
     'payType': payType.key,
     'dayRate': dayRate,
     'hourlyRate': hourlyRate,
@@ -105,6 +163,7 @@ class Worker {
     return Worker(
       id: json['id'] as String,
       name: (json['name'] as String?) ?? '',
+      kind: WorkerKind.fromKey(json['kind']),
       payType: PayType.fromKey(json['payType']),
       dayRate: _int(json['dayRate']),
       hourlyRate: _int(json['hourlyRate']),
@@ -156,12 +215,16 @@ class Site {
   }
 }
 
-/// One worker on one day (出面). A worker has at most one record per day.
+/// One entry of a worker on one day (出面). Since 1.0.6 a worker can have
+/// several entries on the same day (another 現場, 昼 and 夜勤), so every entry
+/// has its own [id].
 ///
 /// The pay type and rates are copied in when the record is made, so a later
 /// raise does not rewrite months that were already paid.
 class DayRecord {
-  const DayRecord({
+  DayRecord({
+    String? id,
+    this.shift = Shift.day,
     required this.workerId,
     required this.day,
     required this.siteId,
@@ -173,7 +236,13 @@ class DayRecord {
     this.hours = 0,
     this.hourlyRate = 0,
     this.monthlySalary = 0,
-  });
+  }) : id = id ?? createId();
+
+  /// Unique per entry. Files before 1.0.6 get `workerId@day`.
+  final String id;
+
+  /// 昼 or 夜勤.
+  final Shift shift;
 
   final PayType payType;
 
@@ -191,7 +260,8 @@ class DayRecord {
   final String day;
   final String siteId;
 
-  /// 人工: 1.0 for a full day, 0.5 for a half day.
+  /// 人工: 1.0 for a full day, 0.5 for a half day, more for a 外注 crew
+  /// (0.5 steps, up to [maxUnitsPerRecord]).
   final double units;
   final double overtimeHours;
   final int dayRate;
@@ -211,6 +281,22 @@ class DayRecord {
     return base + overtimeAmount;
   }
 
+  DayRecord withId(String newId) => DayRecord(
+    id: newId,
+    shift: shift,
+    workerId: workerId,
+    day: day,
+    siteId: siteId,
+    units: units,
+    overtimeHours: overtimeHours,
+    dayRate: dayRate,
+    overtimeRate: overtimeRate,
+    payType: payType,
+    hours: hours,
+    hourlyRate: hourlyRate,
+    monthlySalary: monthlySalary,
+  );
+
   DayRecord copyWith({
     String? siteId,
     double? units,
@@ -221,8 +307,11 @@ class DayRecord {
     double? hours,
     int? hourlyRate,
     int? monthlySalary,
+    Shift? shift,
   }) {
     return DayRecord(
+      id: id,
+      shift: shift ?? this.shift,
       workerId: workerId,
       day: day,
       siteId: siteId ?? this.siteId,
@@ -238,6 +327,8 @@ class DayRecord {
   }
 
   Map<String, dynamic> toJson() => {
+    'id': id,
+    'shift': shift.key,
     'workerId': workerId,
     'day': day,
     'siteId': siteId,
@@ -252,9 +343,14 @@ class DayRecord {
   };
 
   static DayRecord fromJson(Map<String, dynamic> json) {
+    final workerId = json['workerId'] as String;
+    final day = json['day'] as String;
+    final id = json['id'];
     return DayRecord(
-      workerId: json['workerId'] as String,
-      day: json['day'] as String,
+      id: id is String && id.isNotEmpty ? id : '$workerId@$day',
+      shift: Shift.fromKey(json['shift']),
+      workerId: workerId,
+      day: day,
       siteId: (json['siteId'] as String?) ?? '',
       payType: PayType.fromKey(json['payType']),
       units: _double(json['units'], fallback: 1),

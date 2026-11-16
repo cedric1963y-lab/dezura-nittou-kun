@@ -152,6 +152,7 @@ void main() {
 
     await c.setRecord(
       workerId: w.id,
+      recordId: half.id,
       day: day,
       siteId: c.sites.single.id,
       units: 1,
@@ -164,6 +165,7 @@ void main() {
     await expectLater(
       c.setRecord(
         workerId: w.id,
+        recordId: half.id,
         day: day,
         siteId: c.sites.single.id,
         units: 1,
@@ -230,8 +232,8 @@ void main() {
       expect(text, contains('合計　3.5人工　¥320,000'));
 
       final csv = summaryAsCsv(s).trim().split('\n');
-      expect(csv, contains('2026-10,山田 花子,,,,,,300000,月給,,'));
-      expect(csv.last, '合計,,,3.5,1,,,320000,,,');
+      expect(csv, contains('2026-10,山田 花子,,,,,,300000,月給,,,,従業員'));
+      expect(csv.last, '合計,,,3.5,1,,,320000,,,,,');
 
       // Nothing for a month without attendance.
       expect(c.summaryFor(DateTime(2026, 11)).amount, 0);

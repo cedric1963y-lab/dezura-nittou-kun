@@ -80,27 +80,44 @@ class _SummaryScreenState extends State<SummaryScreen> {
           ),
         )
       else ...[
-        const _SectionTitle('職人別'),
-        Panel(
-          padding: EdgeInsets.zero,
-          child: Column(
-            children: [
-              for (var i = 0; i < summary.workers.length; i++) ...[
-                if (i > 0) const Divider(height: 1),
-                _Row(
-                  title: summary.workers[i].worker.name,
-                  detail: [
-                    summary.workers[i].payType.label,
-                    workerDetail(summary.workers[i]),
-                    if (summary.workers[i].overtimeHours > 0)
-                      '残業${formatHours(summary.workers[i].overtimeHours)}',
-                  ].join('・'),
-                  amount: summary.workers[i].amount,
+        if (summary.hasContractor) ...[
+          for (final kind in WorkerKind.values)
+            if (summary.workersOf(kind).isNotEmpty) ...[
+              _SectionTitle(kind.label),
+              _WorkerList(
+                workers: summary.workersOf(kind),
+                subtotalLabel: '${kind.label} 小計',
+                subtotalUnits: summary.unitsOf(kind),
+                subtotalAmount: summary.amountOf(kind),
+                subtotalKey: Key('subtotal-${kind.key}'),
+              ),
+              const SizedBox(height: 12),
+            ],
+          Panel(
+            color: AppColors.paper,
+            child: Row(
+              key: const Key('grand-total'),
+              children: [
+                const Text(
+                  '合計（従業員＋外注）',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+                const Spacer(),
+                Text(
+                  '${formatUnits(summary.units)}人工　${formatYen(summary.amount)}',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.navy,
+                  ),
                 ),
               ],
-            ],
+            ),
           ),
-        ),
+        ] else ...[
+          const _SectionTitle('職人別'),
+          _WorkerList(workers: summary.workers),
+        ],
         const SizedBox(height: 16),
         const _SectionTitle('現場別'),
         Panel(
@@ -112,7 +129,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
                 _Row(
                   title: summary.sites[i].site.name,
                   detail:
-                      '${formatUnits(summary.sites[i].units)}人工・${summary.sites[i].workerCount}人',
+                      '${formatUnits(summary.sites[i].units)}人工・${summary.sites[i].workerCount}人${summary.sites[i].nightUnits > 0 ? '\n昼${formatUnits(summary.sites[i].dayUnits)}人工・夜勤${formatUnits(summary.sites[i].nightUnits)}人工' : ''}',
                   amount: summary.sites[i].amount,
                 ),
               ],
@@ -157,6 +174,77 @@ class _SummaryScreenState extends State<SummaryScreen> {
         label: const Text('出面表PDF・CSV'),
       ),
     ];
+  }
+}
+
+class _WorkerList extends StatelessWidget {
+  const _WorkerList({
+    required this.workers,
+    this.subtotalLabel,
+    this.subtotalUnits = 0,
+    this.subtotalAmount = 0,
+    this.subtotalKey,
+  });
+
+  final List<WorkerTotal> workers;
+  final String? subtotalLabel;
+  final double subtotalUnits;
+  final int subtotalAmount;
+  final Key? subtotalKey;
+
+  @override
+  Widget build(BuildContext context) {
+    return Panel(
+      padding: EdgeInsets.zero,
+      child: Column(
+        children: [
+          for (var i = 0; i < workers.length; i++) ...[
+            if (i > 0) const Divider(height: 1),
+            _Row(
+              title: workers[i].worker.name,
+              detail: [
+                workers[i].payName,
+                workerDetail(workers[i]),
+                if (workers[i].overtimeHours > 0)
+                  '残業${formatHours(workers[i].overtimeHours)}',
+              ].join('・'),
+              // Only when split over several 現場 or 昼/夜勤.
+              extraLines: workers[i].breakdown.length > 1
+                  ? [
+                      for (final row in workers[i].breakdown)
+                        '${breakdownLabel(row)}　${formatUnits(row.units)}人工',
+                    ]
+                  : const [],
+              amount: workers[i].amount,
+            ),
+          ],
+          if (subtotalLabel != null) ...[
+            const Divider(height: 1),
+            Container(
+              color: AppColors.paper,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              child: Row(
+                key: subtotalKey,
+                children: [
+                  Text(
+                    subtotalLabel!,
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  const Spacer(),
+                  Text(
+                    '${formatUnits(subtotalUnits)}人工　${formatYen(subtotalAmount)}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.navy,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 }
 
@@ -218,7 +306,10 @@ class _Stat extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+          Text(
+            label,
+            style: const TextStyle(color: Colors.white70, fontSize: 12),
+          ),
           Text(
             value,
             style: const TextStyle(
@@ -251,10 +342,16 @@ class _SectionTitle extends StatelessWidget {
 }
 
 class _Row extends StatelessWidget {
-  const _Row({required this.title, required this.detail, required this.amount});
+  const _Row({
+    required this.title,
+    required this.detail,
+    required this.amount,
+    this.extraLines = const [],
+  });
 
   final String title;
   final String detail;
+  final List<String> extraLines;
   final int amount;
 
   @override
@@ -280,6 +377,14 @@ class _Row extends StatelessWidget {
                   detail,
                   style: const TextStyle(color: AppColors.muted, fontSize: 13),
                 ),
+                for (final line in extraLines)
+                  Text(
+                    '└ $line',
+                    style: const TextStyle(
+                      color: AppColors.muted,
+                      fontSize: 12,
+                    ),
+                  ),
               ],
             ),
           ),

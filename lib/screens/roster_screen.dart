@@ -33,7 +33,7 @@ class _RosterScreenState extends State<RosterScreen> {
         onPressed: () =>
             workersTab ? _addWorker(controller) : _addSite(controller),
         icon: const Icon(Icons.add),
-        label: Text(workersTab ? '職人を追加' : '現場を追加'),
+        label: Text(workersTab ? '職人・外注を追加' : '現場を追加'),
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(14, 14, 14, 96),
@@ -93,6 +93,7 @@ class _RosterScreenState extends State<RosterScreen> {
               ),
               subtitle: Text(
                 [
+                  if (w.kind == WorkerKind.contractor) '外注',
                   payLabel(w),
                   if (w.overtimeRate > 0) '残業 ${formatYen(w.overtimeRate)}/h',
                 ].join('・'),
@@ -168,6 +169,7 @@ class _RosterScreenState extends State<RosterScreen> {
         payType: draft.payType,
         hourlyRate: draft.hourlyRate,
         monthlySalary: draft.monthlySalary,
+        kind: draft.kind,
       ),
     );
   }
@@ -177,7 +179,7 @@ class _RosterScreenState extends State<RosterScreen> {
     if (w == null) return;
     final draft = await showWorkerDialog(
       context,
-      title: '職人を編集',
+      title: w.kind == WorkerKind.contractor ? '外注を編集' : '職人を編集',
       saveLabel: '保存',
       initialName: w.name,
       initialDayRate: w.dayRate,
@@ -185,6 +187,7 @@ class _RosterScreenState extends State<RosterScreen> {
       initialPayType: w.payType,
       initialHourlyRate: w.hourlyRate,
       initialMonthlySalary: w.monthlySalary,
+      initialKind: w.kind,
       note: '給与の形・単価の変更は、今月1日以降の出面に反映されます。先月までの金額は変わりません。',
     );
     if (draft == null || !mounted) return;
@@ -198,6 +201,7 @@ class _RosterScreenState extends State<RosterScreen> {
         payType: draft.payType,
         hourlyRate: draft.hourlyRate,
         monthlySalary: draft.monthlySalary,
+        kind: draft.kind,
       ),
     );
   }

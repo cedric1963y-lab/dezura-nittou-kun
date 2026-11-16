@@ -9,12 +9,28 @@ class WorkerTotal {
     required this.overtimeHours,
     required this.amount,
     required this.unitsByDay,
+    this.nightDays = const {},
+    this.breakdown = const [],
     this.payType = PayType.daily,
     this.hours = 0,
     this.salary = 0,
   });
 
   final Worker worker;
+
+  WorkerKind get kind => worker.kind;
+
+  /// `日当` / `時給` / `月給`, or `単価` for a 外注 paid per 人工.
+  String get payName =>
+      kind == WorkerKind.contractor && payType == PayType.daily
+      ? '単価'
+      : payType.label;
+
+  /// Days of month that include a 夜勤 entry, for the PDF grid.
+  final Set<int> nightDays;
+
+  /// Units and amount per 現場 and 昼/夜勤 (only the combinations used).
+  final List<BreakdownRow> breakdown;
 
   /// Pay type of this worker's records in the month (the latest one if it
   /// was changed during the month).
@@ -32,8 +48,29 @@ class WorkerTotal {
   final double overtimeHours;
   final int amount;
 
-  /// Day of month -> 人工, for the PDF grid.
+  /// Day of month -> 人工 (all entries of that day added), for the PDF grid.
   final Map<int, double> unitsByDay;
+}
+
+/// One worker at one 現場 in one shift, summed over the month.
+class BreakdownRow {
+  const BreakdownRow({
+    required this.worker,
+    required this.site,
+    required this.shift,
+    required this.units,
+    required this.amount,
+    required this.days,
+  });
+
+  final Worker worker;
+  final Site site;
+  final Shift shift;
+  final double units;
+
+  /// Without 月給 (counted once per month on the worker).
+  final int amount;
+  final int days;
 }
 
 class SiteTotal {
@@ -42,7 +79,12 @@ class SiteTotal {
     required this.units,
     required this.amount,
     required this.workerCount,
+    this.nightUnits = 0,
   });
+
+  /// 人工 of 夜勤 entries, included in [units].
+  final double nightUnits;
+  double get dayUnits => units - nightUnits;
 
   final Site site;
   final double units;
@@ -64,6 +106,27 @@ class MonthSummary {
 
   /// Records in this month, sorted by day then worker order.
   final List<DayRecord> records;
+
+  List<WorkerTotal> workersOf(WorkerKind kind) => [
+    for (final w in workers)
+      if (w.kind == kind) w,
+  ];
+
+  /// True when any 外注 has an entry this month. Then the summary shows
+  /// 従業員 and 外注 subtotals.
+  bool get hasContractor => workers.any((w) => w.kind == WorkerKind.contractor);
+
+  double unitsOf(WorkerKind kind) =>
+      workersOf(kind).fold(0, (sum, w) => sum + w.units);
+  int amountOf(WorkerKind kind) =>
+      workersOf(kind).fold(0, (sum, w) => sum + w.amount);
+  int daysOf(WorkerKind kind) => records
+      .where((r) => workersOf(kind).any((w) => w.worker.id == r.workerId))
+      .map((r) => r.day)
+      .toSet()
+      .length;
+
+  double get nightUnits => sites.fold(0, (sum, s) => sum + s.nightUnits);
 
   double get units => workers.fold(0, (sum, w) => sum + w.units);
   double get overtimeHours =>
@@ -102,7 +165,11 @@ MonthSummary summarizeMonth({
       ]..sort((a, b) {
         final byDay = a.day.compareTo(b.day);
         if (byDay != 0) return byDay;
-        return workerOrder[a.workerId]!.compareTo(workerOrder[b.workerId]!);
+        final byWorker = workerOrder[a.workerId]!.compareTo(
+          workerOrder[b.workerId]!,
+        );
+        if (byWorker != 0) return byWorker;
+        return a.shift.index.compareTo(b.shift.index);
       });
 
   final workerTotals = <WorkerTotal>[];
@@ -112,6 +179,31 @@ MonthSummary summarizeMonth({
     final monthly = mine.where((r) => r.payType == PayType.monthly);
     // Once per month, whatever the attendance. No proration.
     final salary = monthly.isEmpty ? 0 : monthly.last.monthlySalary;
+    final unitsByDay = <int, double>{};
+    for (final r in mine) {
+      if (tryParseDayKey(r.day) case final date?) {
+        unitsByDay[date.day] = (unitsByDay[date.day] ?? 0) + r.units;
+      }
+    }
+    final breakdown = <BreakdownRow>[];
+    for (final site in sites) {
+      for (final shift in Shift.values) {
+        final part = mine
+            .where((r) => r.siteId == site.id && r.shift == shift)
+            .toList();
+        if (part.isEmpty) continue;
+        breakdown.add(
+          BreakdownRow(
+            worker: worker,
+            site: site,
+            shift: shift,
+            units: part.fold(0, (sum, r) => sum + r.units),
+            amount: part.fold(0, (sum, r) => sum + r.amount),
+            days: part.map((r) => r.day).toSet().length,
+          ),
+        );
+      }
+    }
     workerTotals.add(
       WorkerTotal(
         worker: worker,
@@ -124,10 +216,13 @@ MonthSummary summarizeMonth({
         units: mine.fold(0, (sum, r) => sum + r.units),
         overtimeHours: mine.fold(0, (sum, r) => sum + r.overtimeHours),
         amount: mine.fold(salary, (sum, r) => sum + r.amount),
-        unitsByDay: {
+        unitsByDay: unitsByDay,
+        nightDays: {
           for (final r in mine)
-            if (tryParseDayKey(r.day) case final date?) date.day: r.units,
+            if (r.shift == Shift.night)
+              if (tryParseDayKey(r.day) case final date?) date.day,
         },
+        breakdown: breakdown,
       ),
     );
   }
@@ -142,6 +237,9 @@ MonthSummary summarizeMonth({
         units: here.fold(0, (sum, r) => sum + r.units),
         amount: here.fold(0, (sum, r) => sum + r.amount),
         workerCount: here.map((r) => r.workerId).toSet().length,
+        nightUnits: here
+            .where((r) => r.shift == Shift.night)
+            .fold(0, (sum, r) => sum + r.units),
       ),
     );
   }
@@ -164,20 +262,49 @@ String summaryAsText(MonthSummary summary) {
     b.writeln('この月の出面はまだありません。');
     return b.toString().trimRight();
   }
-  b.writeln('■ 職人別');
-  for (final w in summary.workers) {
-    final ot = w.overtimeHours > 0 ? ' 残業${formatHours(w.overtimeHours)}' : '';
-    b.writeln(
-      // 日当 lines read exactly as before 1.0.5.
-      '${w.worker.name}${w.payType == PayType.daily ? '' : '（${w.payType.label}）'}　${workerDetail(w)}$ot　${formatYen(w.amount)}',
-    );
+  void workerLines(Iterable<WorkerTotal> list) {
+    for (final w in list) {
+      final ot = w.overtimeHours > 0
+          ? ' 残業${formatHours(w.overtimeHours)}'
+          : '';
+      b.writeln(
+        // 日当 lines read exactly as before 1.0.5.
+        '${w.worker.name}${w.payType == PayType.daily ? '' : '（${w.payType.label}）'}　${workerDetail(w)}$ot　${formatYen(w.amount)}',
+      );
+      // Only when the worker was split over several 現場 or 昼/夜勤.
+      if (w.breakdown.length > 1) {
+        for (final row in w.breakdown) {
+          b.writeln('　└ ${breakdownLabel(row)}　${formatUnits(row.units)}人工');
+        }
+      }
+    }
+  }
+
+  if (summary.hasContractor) {
+    for (final kind in WorkerKind.values) {
+      final list = summary.workersOf(kind);
+      if (list.isEmpty) continue;
+      b.writeln('■ ${kind.label}');
+      workerLines(list);
+      b
+        ..writeln(
+          '${kind.label}小計　${formatUnits(summary.unitsOf(kind))}人工　${formatYen(summary.amountOf(kind))}',
+        )
+        ..writeln();
+    }
+  } else {
+    b.writeln('■ 職人別');
+    workerLines(summary.workers);
   }
   b
     ..writeln()
     ..writeln('■ 現場別');
   for (final s in summary.sites) {
+    final night = s.nightUnits > 0
+        ? '（昼${formatUnits(s.dayUnits)}・夜勤${formatUnits(s.nightUnits)}）'
+        : '';
     b.writeln(
-      '${s.site.name}　${formatUnits(s.units)}人工　${formatYen(s.amount)}',
+      '${s.site.name}　${formatUnits(s.units)}人工$night　${formatYen(s.amount)}',
     );
   }
   if (summary.hasMonthly) b.writeln(monthlySiteNote);
@@ -191,6 +318,10 @@ String summaryAsText(MonthSummary summary) {
   }
   return b.toString().trimRight();
 }
+
+/// `現場A・昼` / `現場B・夜勤`.
+String breakdownLabel(BreakdownRow row) =>
+    '${row.site.name}・${row.shift.label}';
 
 /// `3人工（3日）`, `24h（3日）` or `出勤3日（3人工）` by pay type.
 String workerDetail(WorkerTotal w) => switch (w.payType) {
@@ -206,10 +337,12 @@ const monthlySiteNote = '※月給は現場別の金額に含みません（人�
 /// opens the Japanese correctly.
 String summaryAsCsv(MonthSummary summary) {
   final names = {for (final w in summary.workers) w.worker.id: w.worker.name};
+  final kinds = {for (final w in summary.workers) w.worker.id: w.kind};
   final siteNames = {for (final s in summary.sites) s.site.id: s.site.name};
-  // The first 8 columns are the same as 1.0.4, so existing sheets still work.
+  // The first 11 columns are the same as 1.0.5 (the first 8 as 1.0.4), so
+  // existing sheets still work. 1.0.6 adds 昼夜 and 従業員/外注 at the end.
   final b = StringBuffer('\uFEFF')
-    ..writeln('日付,職人,現場,人工,残業時間,日当,残業単価,金額,区分,勤務時間,時給');
+    ..writeln('日付,職人,現場,人工,残業時間,日当,残業単価,金額,区分,勤務時間,時給,昼夜,従業員外注');
   for (final r in summary.records) {
     b.writeln(
       [
@@ -224,6 +357,8 @@ String summaryAsCsv(MonthSummary summary) {
         r.payType.label,
         r.payType == PayType.hourly ? formatUnits(r.hours) : '',
         r.payType == PayType.hourly ? r.hourlyRate : '',
+        r.shift.label,
+        (kinds[r.workerId] ?? WorkerKind.employee).label,
       ].join(','),
     );
   }
@@ -242,11 +377,20 @@ String summaryAsCsv(MonthSummary summary) {
         '月給',
         '',
         '',
+        '',
+        w.kind.label,
       ].join(','),
     );
   }
+  if (summary.hasContractor) {
+    for (final kind in WorkerKind.values) {
+      b.writeln(
+        '${kind.label}小計,,,${formatUnits(summary.unitsOf(kind))},${formatUnits(summary.workersOf(kind).fold(0.0, (sum, w) => sum + w.overtimeHours))},,,${summary.amountOf(kind)},,,,,${kind.label}',
+      );
+    }
+  }
   b.writeln(
-    '合計,,,${formatUnits(summary.units)},${formatUnits(summary.overtimeHours)},,,${summary.amount},,,',
+    '合計,,,${formatUnits(summary.units)},${formatUnits(summary.overtimeHours)},,,${summary.amount},,,,,',
   );
   return b.toString();
 }

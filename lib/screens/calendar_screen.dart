@@ -126,18 +126,37 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 padding: const EdgeInsets.only(bottom: 8),
                 child: _WorkerTile(
                   worker: worker,
-                  record: controller.recordFor(worker.id, day),
+                  records: controller.recordsFor(worker.id, day),
                   siteName: (record) =>
                       controller.siteById(record.siteId)?.name ?? '',
                   showSite: (record) =>
                       record.siteId != controller.selectedSite?.id,
-                  onTap: () => guard(context, () async {
-                    final next = await controller.tapWorker(worker.id, day);
-                    if (next != null) {
-                      ReviewPrompt.afterEntry(controller.records.length);
+                  onTap: () {
+                    final first = controller.recordFor(worker.id, day);
+                    // A 外注 needs a crew size, so it opens the sheet.
+                    if (worker.kind == WorkerKind.contractor) {
+                      showRecordSheet(
+                        context,
+                        worker: worker,
+                        day: day,
+                        recordId: first?.id,
+                      );
+                      return;
                     }
-                  }),
-                  onEdit: () =>
+                    guard(context, () async {
+                      final next = await controller.tapWorker(worker.id, day);
+                      if (next != null) {
+                        ReviewPrompt.afterEntry(controller.records.length);
+                      }
+                    });
+                  },
+                  onEdit: (recordId) => showRecordSheet(
+                    context,
+                    worker: worker,
+                    day: day,
+                    recordId: recordId,
+                  ),
+                  onAdd: () =>
                       showRecordSheet(context, worker: worker, day: day),
                 ),
               ),
@@ -155,18 +174,30 @@ class _CalendarScreenState extends State<CalendarScreen> {
                       if (!context.mounted) return;
                       showSnack(
                         context,
-                        added == 0 ? '全員すでに付いています。' : '$added人を1人工で付けました。',
+                        added == 0
+                            ? (controller.workers.any(
+                                    (w) => w.kind == WorkerKind.contractor,
+                                  )
+                                  ? '従業員は全員すでに付いています。'
+                                  : '全員すでに付いています。')
+                            : '$added人を1人工で付けました。',
                       );
                     }),
                     icon: const Icon(Icons.done_all),
-                    label: const Text('全員 1人工'),
+                    label: Text(
+                      controller.workers.any(
+                            (w) => w.kind == WorkerKind.contractor,
+                          )
+                          ? '従業員全員 1人工'
+                          : '全員 1人工',
+                    ),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 10),
             const Text(
-              'タップで「1人工 → 半日 → 取消」。現場の変更や残業は右の「…」から。',
+              'タップで「1人工 → 半日 → 取消」。現場の変更・残業・夜勤は右の「…」から。同じ日の2件目（半日ずつ別の現場・昼と夜勤）は「もう1件追加」から。外注は人工を入力します。',
               style: TextStyle(
                 color: AppColors.muted,
                 fontSize: 13,
@@ -416,95 +447,159 @@ class _SitePicker extends StatelessWidget {
 class _WorkerTile extends StatelessWidget {
   const _WorkerTile({
     required this.worker,
-    required this.record,
+    required this.records,
     required this.siteName,
     required this.showSite,
     required this.onTap,
     required this.onEdit,
+    required this.onAdd,
   });
 
   final Worker worker;
-  final DayRecord? record;
+
+  /// Every entry of the worker on the selected day (昼 before 夜勤).
+  final List<DayRecord> records;
   final String Function(DayRecord record) siteName;
   final bool Function(DayRecord record) showSite;
   final VoidCallback onTap;
-  final VoidCallback onEdit;
+
+  /// Opens the sheet for an entry, or for a new one when the id is null.
+  final void Function(String? recordId) onEdit;
+  final VoidCallback onAdd;
+
+  List<String> _details(DayRecord? r, {bool first = true}) {
+    final multiple = records.length > 1;
+    return [
+      if (first) ...[
+        if (worker.kind == WorkerKind.contractor) '外注',
+        payLabel(worker),
+      ],
+      if (r != null && r.payType == PayType.hourly) formatHours(r.hours),
+      if (r != null && (multiple || r.shift == Shift.night)) r.shift.label,
+      if (r != null && r.overtimeHours > 0) '残業${formatHours(r.overtimeHours)}',
+      if (r != null && (multiple || showSite(r))) siteName(r),
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
-    final r = record;
-    final details = <String>[
-      payLabel(worker),
-      if (r != null && r.payType == PayType.hourly) formatHours(r.hours),
-      if (r != null && r.overtimeHours > 0) '残業${formatHours(r.overtimeHours)}',
-      if (r != null && showSite(r)) siteName(r),
-    ];
+    final r = records.isEmpty ? null : records.first;
+    final extras = records.length > 1 ? records.sublist(1) : <DayRecord>[];
     return Material(
       color: AppColors.card,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        key: Key('worker-${worker.id}'),
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        onTap: onTap,
-        onLongPress: onEdit,
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: r == null ? AppColors.line : AppColors.navy,
-              width: r == null ? 1 : 1.4,
+        side: BorderSide(
+          color: r == null ? AppColors.line : AppColors.navy,
+          width: r == null ? 1 : 1.4,
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          InkWell(
+            key: Key('worker-${worker.id}'),
+            onTap: onTap,
+            onLongPress: () => onEdit(r?.id),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 4, 10),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 20,
+                    backgroundColor: r == null
+                        ? AppColors.paper
+                        : AppColors.amberSoft,
+                    foregroundColor: AppColors.navy,
+                    child: Text(
+                      nameInitial(worker.name),
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          worker.name,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          _details(r).join('・'),
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: AppColors.muted,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  _StatusPill(units: r?.units),
+                  IconButton(
+                    key: Key('edit-${worker.id}'),
+                    tooltip: '現場・残業・夜勤',
+                    onPressed: () => onEdit(r?.id),
+                    icon: const Icon(Icons.more_horiz, color: AppColors.muted),
+                  ),
+                ],
+              ),
             ),
           ),
-          child: Row(
-            children: [
-              CircleAvatar(
-                radius: 20,
-                backgroundColor: r == null
-                    ? AppColors.paper
-                    : AppColors.amberSoft,
-                foregroundColor: AppColors.navy,
-                child: Text(
-                  nameInitial(worker.name),
-                  style: const TextStyle(fontWeight: FontWeight.w800),
+          for (final extra in extras)
+            InkWell(
+              key: Key('record-${extra.id}'),
+              onTap: () => onEdit(extra.id),
+              child: Container(
+                decoration: const BoxDecoration(
+                  border: Border(top: BorderSide(color: AppColors.line)),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                padding: const EdgeInsets.fromLTRB(72, 8, 14, 8),
+                child: Row(
                   children: [
+                    Expanded(
+                      child: Text(
+                        _details(extra, first: false).join('・'),
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.muted,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
                     Text(
-                      worker.name,
-                      overflow: TextOverflow.ellipsis,
+                      '${formatUnits(extra.units)}人工',
                       style: const TextStyle(
-                        fontSize: 16,
+                        fontSize: 15,
                         fontWeight: FontWeight.w800,
+                        color: AppColors.navy,
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      details.join('・'),
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppColors.muted,
-                        fontSize: 13,
-                      ),
-                    ),
+                    const Icon(Icons.chevron_right, color: AppColors.muted),
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
-              _StatusPill(units: r?.units),
-              IconButton(
-                key: Key('edit-${worker.id}'),
-                tooltip: '現場・残業',
-                onPressed: onEdit,
-                icon: const Icon(Icons.more_horiz, color: AppColors.muted),
+            ),
+          if (r != null)
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                key: Key('add-record-${worker.id}'),
+                onPressed: onAdd,
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('同じ日にもう1件追加'),
               ),
-            ],
-          ),
-        ),
+            ),
+        ],
       ),
     );
   }
@@ -528,7 +623,7 @@ class _StatusPill extends StatelessWidget {
     } else if (u >= 1) {
       background = AppColors.navy;
       foreground = Colors.white;
-      label = '1人工';
+      label = '${formatUnits(u)}人工';
     } else {
       background = AppColors.amber;
       foreground = AppColors.ink;
@@ -608,6 +703,7 @@ class _SetupCard extends StatelessWidget {
                     payType: draft.payType,
                     hourlyRate: draft.hourlyRate,
                     monthlySalary: draft.monthlySalary,
+                    kind: draft.kind,
                   ),
                 );
               },

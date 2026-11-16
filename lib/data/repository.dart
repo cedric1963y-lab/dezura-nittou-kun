@@ -16,10 +16,12 @@ class Repository {
   static const _encoder = JsonEncoder.withIndent('  ');
 
   /// Version written to workers.json and records.json. 2 adds the pay type
-  /// (日当・時給・月給). Version 1 files (1.0.4 and earlier) are still read;
-  /// a missing pay type means 日当.
-  static const listSchemaVersion = 2;
-  static const _readableVersions = {1, 2};
+  /// (日当・時給・月給). 3 (1.0.6) adds a record id and 昼/夜勤 to records and
+  /// 従業員/外注 to workers. Version 1 and 2 files are still read: a missing
+  /// pay type means 日当, a missing kind 従業員, a missing shift 昼, and a
+  /// missing record id becomes `workerId@day`.
+  static const listSchemaVersion = 3;
+  static const _readableVersions = {1, 2, 3};
 
   String get exportDirectory => p.join(root.path, 'exports');
 
@@ -43,8 +45,28 @@ class Repository {
   Future<void> saveSites(List<Site> sites) =>
       _saveList('sites.json', 'sites', [for (final s in sites) s.toJson()]);
 
-  Future<List<DayRecord>> loadRecords() =>
-      _loadList('records.json', 'records', DayRecord.fromJson);
+  Future<List<DayRecord>> loadRecords() async {
+    final records = await _loadList(
+      'records.json',
+      'records',
+      DayRecord.fromJson,
+    );
+    // Ids must be unique. A damaged file with a repeated id keeps every
+    // entry by renaming the later ones.
+    final seen = <String>{};
+    return [
+      for (final r in records)
+        if (seen.add(r.id)) r else r.withId(_freshId(seen, r.id)),
+    ];
+  }
+
+  static String _freshId(Set<String> seen, String base) {
+    var n = 2;
+    while (!seen.add('$base#$n')) {
+      n++;
+    }
+    return '$base#$n';
+  }
 
   Future<void> saveRecords(List<DayRecord> records) => _saveList(
     'records.json',

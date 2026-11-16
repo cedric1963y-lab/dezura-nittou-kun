@@ -73,9 +73,11 @@ class WorkerDraft {
     this.payType = PayType.daily,
     this.hourlyRate = 0,
     this.monthlySalary = 0,
+    this.kind = WorkerKind.employee,
   });
 
   final String name;
+  final WorkerKind kind;
   final PayType payType;
   final int dayRate;
   final int hourlyRate;
@@ -85,7 +87,7 @@ class WorkerDraft {
 
 Future<WorkerDraft?> showWorkerDialog(
   BuildContext context, {
-  String title = '職人を追加',
+  String title = '職人・外注を追加',
   String saveLabel = '追加',
   String initialName = '',
   int? initialDayRate,
@@ -93,6 +95,7 @@ Future<WorkerDraft?> showWorkerDialog(
   PayType initialPayType = PayType.daily,
   int initialHourlyRate = 0,
   int initialMonthlySalary = 0,
+  WorkerKind initialKind = WorkerKind.employee,
   String? note,
 }) {
   return showDialog<WorkerDraft>(
@@ -104,9 +107,12 @@ Future<WorkerDraft?> showWorkerDialog(
       initialRates: {
         PayType.daily: initialDayRate,
         PayType.hourly: initialHourlyRate == 0 ? null : initialHourlyRate,
-        PayType.monthly: initialMonthlySalary == 0 ? null : initialMonthlySalary,
+        PayType.monthly: initialMonthlySalary == 0
+            ? null
+            : initialMonthlySalary,
       },
       initialPayType: initialPayType,
+      initialKind: initialKind,
       initialOvertimeRate: initialOvertimeRate,
       note: note,
     ),
@@ -120,6 +126,7 @@ class _WorkerDialog extends StatefulWidget {
     required this.initialName,
     required this.initialRates,
     required this.initialPayType,
+    required this.initialKind,
     required this.initialOvertimeRate,
     required this.note,
   });
@@ -129,6 +136,7 @@ class _WorkerDialog extends StatefulWidget {
   final String initialName;
   final Map<PayType, int?> initialRates;
   final PayType initialPayType;
+  final WorkerKind initialKind;
   final int initialOvertimeRate;
   final String? note;
 
@@ -150,7 +158,10 @@ class _WorkerDialogState extends State<_WorkerDialog> {
         : widget.initialOvertimeRate.toString(),
   );
   late PayType _payType = widget.initialPayType;
+  late WorkerKind _kind = widget.initialKind;
   String? _error;
+
+  bool get _contractor => _kind == WorkerKind.contractor;
 
   static const _rateLabels = {
     PayType.daily: '日当（1人工あたり）',
@@ -181,7 +192,7 @@ class _WorkerDialogState extends State<_WorkerDialog> {
     final rate = parseYen(_rates[_payType]!.text);
     final overtime = parseYen(_overtime.text) ?? 0;
     if (name.isEmpty) {
-      setState(() => _error = '名前を入力してください。');
+      setState(() => _error = _contractor ? '会社名を入力してください。' : '名前を入力してください。');
       return;
     }
     if (rate == null) {
@@ -192,6 +203,7 @@ class _WorkerDialogState extends State<_WorkerDialog> {
       context,
       WorkerDraft(
         name: name,
+        kind: _kind,
         payType: _payType,
         dayRate: _payType == PayType.daily ? rate : _rateOf(PayType.daily),
         hourlyRate: _payType == PayType.hourly ? rate : _rateOf(PayType.hourly),
@@ -213,15 +225,34 @@ class _WorkerDialogState extends State<_WorkerDialog> {
       error: _error,
       note: widget.note,
       children: [
+        const Text('区分', style: TextStyle(fontWeight: FontWeight.w800)),
+        const SizedBox(height: 6),
+        SizedBox(
+          width: double.infinity,
+          child: SegmentedButton<WorkerKind>(
+            key: const Key('worker-kind'),
+            segments: [
+              for (final kind in WorkerKind.values)
+                ButtonSegment(
+                  value: kind,
+                  label: Text(kind.label, key: Key('kind-${kind.key}')),
+                ),
+            ],
+            selected: {_kind},
+            showSelectedIcon: false,
+            onSelectionChanged: (value) => setState(() => _kind = value.first),
+          ),
+        ),
+        const SizedBox(height: 12),
         TextField(
           key: const Key('worker-name'),
           controller: _name,
           autofocus: widget.initialName.isEmpty,
           maxLength: 20,
           textInputAction: TextInputAction.next,
-          decoration: const InputDecoration(
-            labelText: '名前',
-            hintText: '例: 山田 太郎',
+          decoration: InputDecoration(
+            labelText: _contractor ? '会社名・屋号' : '名前',
+            hintText: _contractor ? '例: 山田工業' : '例: 山田 太郎',
             counterText: '',
           ),
         ),
@@ -252,11 +283,14 @@ class _WorkerDialogState extends State<_WorkerDialog> {
           keyboardType: TextInputType.number,
           textInputAction: TextInputAction.next,
           decoration: InputDecoration(
-            labelText: _rateLabels[_payType],
+            labelText: _contractor && _payType == PayType.daily
+                ? '単価（1人工あたり）'
+                : _rateLabels[_payType],
             hintText: _rateHints[_payType],
             suffixText: '円',
             helperText: switch (_payType) {
-              PayType.daily => '金額 = 人工 × 日当',
+              PayType.daily =>
+                _contractor ? '金額 = 人工 × 単価（3人入れた日は3人工）' : '金額 = 人工 × 日当',
               PayType.hourly => '金額 = 勤務時間 × 時給（1人工 = 8時間）',
               PayType.monthly => '月給は出勤した月に1回だけ集計します',
             },
@@ -441,7 +475,9 @@ class _FormDialog extends StatelessWidget {
                 FilledButton(
                   key: saveKey,
                   onPressed: onSave,
-                  style: FilledButton.styleFrom(minimumSize: const Size(96, 46)),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(96, 46),
+                  ),
                   child: Text(saveLabel),
                 ),
               ],
@@ -522,7 +558,11 @@ class MonthSwitcher extends StatelessWidget {
               ),
               if (locked) ...[
                 const SizedBox(width: 6),
-                const Icon(Icons.lock_outline, size: 18, color: AppColors.muted),
+                const Icon(
+                  Icons.lock_outline,
+                  size: 18,
+                  color: AppColors.muted,
+                ),
               ],
             ],
           ),

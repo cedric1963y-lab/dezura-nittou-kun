@@ -57,6 +57,11 @@ Future<Uint8List> buildMonthlyPdf({
             pw.Expanded(flex: 4, child: _siteTable(summary)),
           ],
         ),
+        if (_needsBreakdown(summary)) ...[
+          // Own page, so the title never sits alone at the bottom of one.
+          pw.NewPage(),
+          _breakdownTable(summary),
+        ],
       ],
     ),
   );
@@ -147,8 +152,11 @@ pw.Widget _grid(MonthSummary summary, int days) {
   }
 
   PdfColor dayColor(int day) {
-    final weekday = DateTime(summary.month.year, summary.month.month, day)
-        .weekday;
+    final weekday = DateTime(
+      summary.month.year,
+      summary.month.month,
+      day,
+    ).weekday;
     if (weekday == DateTime.sunday) return _sunday;
     if (weekday == DateTime.saturday) return _saturday;
     return _ink;
@@ -184,33 +192,71 @@ pw.Widget _grid(MonthSummary summary, int days) {
   );
 
   final rows = <pw.TableRow>[head];
-  for (var i = 0; i < summary.workers.length; i++) {
-    final w = summary.workers[i];
-    rows.add(
-      pw.TableRow(
-        decoration: i.isOdd ? const pw.BoxDecoration(color: _zebra) : null,
-        children: [
+  var stripe = 0;
+
+  pw.TableRow workerRow(WorkerTotal w) {
+    final index = stripe++;
+    final contractor = w.kind == WorkerKind.contractor;
+    return pw.TableRow(
+      decoration: index.isOdd ? const pw.BoxDecoration(color: _zebra) : null,
+      children: [
+        cell(
+          contractor
+              ? '${_clip(w.worker.name, 6)}（外注）'
+              : _clip(w.worker.name, 9),
+          size: 8,
+          align: pw.Alignment.centerLeft,
+        ),
+        for (var d = 1; d <= days; d++)
           cell(
-            _clip(w.worker.name, 9),
-            size: 8,
-            align: pw.Alignment.centerLeft,
+            _mark(w.unitsByDay[d], night: w.nightDays.contains(d)),
+            size: _markSize(w.unitsByDay[d], w.nightDays.contains(d)),
+            color: (w.unitsByDay[d] ?? 0) < 1 ? _muted : _navy,
           ),
-          for (var d = 1; d <= days; d++)
-            cell(
-              _mark(w.unitsByDay[d]),
-              size: 8,
-              color: (w.unitsByDay[d] ?? 0) < 1 ? _muted : _navy,
-            ),
-          cell(formatUnits(w.units), bold: true),
-          cell(w.overtimeHours > 0 ? formatUnits(w.overtimeHours) : '-'),
-          cell(
-            formatYen(w.amount),
-            align: pw.Alignment.centerRight,
-            bold: true,
-          ),
-        ],
-      ),
+        cell(formatUnits(w.units), bold: true),
+        cell(w.overtimeHours > 0 ? formatUnits(w.overtimeHours) : '-'),
+        cell(formatYen(w.amount), align: pw.Alignment.centerRight, bold: true),
+      ],
     );
+  }
+
+  pw.TableRow subtotalRow(String label, double units, double ot, int amount) {
+    return pw.TableRow(
+      decoration: const pw.BoxDecoration(color: _zebra),
+      children: [
+        cell(label, bold: true, size: 8, align: pw.Alignment.centerLeft),
+        for (var d = 1; d <= days; d++) cell(''),
+        cell(formatUnits(units), bold: true),
+        cell(ot > 0 ? formatUnits(ot) : '-'),
+        cell(formatYen(amount), align: pw.Alignment.centerRight, bold: true),
+      ],
+    );
+  }
+
+  if (summary.hasContractor) {
+    // 従業員 first, then 外注, each with its own subtotal.
+    for (final kind in WorkerKind.values) {
+      final list = summary.workersOf(kind);
+      if (list.isEmpty) continue;
+      for (final w in list) {
+        rows.add(workerRow(w));
+      }
+      rows.add(
+        subtotalRow(
+          '${kind.label}小計',
+          summary.unitsOf(kind),
+          list.fold(0.0, (sum, w) => sum + w.overtimeHours),
+          summary.amountOf(kind),
+        ),
+      );
+    }
+    rows.add(
+      subtotalRow('合計', summary.units, summary.overtimeHours, summary.amount),
+    );
+  } else {
+    for (final w in summary.workers) {
+      rows.add(workerRow(w));
+    }
   }
 
   if (summary.workers.isEmpty) {
@@ -234,7 +280,7 @@ pw.Widget _grid(MonthSummary summary, int days) {
       ),
       pw.SizedBox(height: 4),
       pw.Text(
-        '○ = 1人工　半 = 0.5人工',
+        '○ = 1人工　半 = 0.5人工　数字 = その日の人工合計（2件以上・1人工超）　夜 = 夜勤を含む日',
         style: const pw.TextStyle(color: _muted, fontSize: 7),
       ),
     ],
@@ -242,21 +288,44 @@ pw.Widget _grid(MonthSummary summary, int days) {
 }
 
 pw.Widget _workerTable(MonthSummary summary) {
+  List<String> row(WorkerTotal w) => [
+    w.kind == WorkerKind.contractor
+        ? '${_clip(w.worker.name, 7)}（外注）'
+        : _clip(w.worker.name, 10),
+    w.payName,
+    '${w.days}日',
+    formatUnits(w.units),
+    w.payType == PayType.hourly ? formatHours(w.hours) : '-',
+    w.overtimeHours > 0 ? formatHours(w.overtimeHours) : '-',
+    formatYen(w.amount),
+  ];
+
+  final rows = <List<String>>[];
+  final bold = <int>{};
+  if (summary.hasContractor) {
+    for (final kind in WorkerKind.values) {
+      final list = summary.workersOf(kind);
+      if (list.isEmpty) continue;
+      rows.addAll(list.map(row));
+      bold.add(rows.length);
+      rows.add([
+        '${kind.label}小計',
+        '',
+        '${summary.daysOf(kind)}日',
+        formatUnits(summary.unitsOf(kind)),
+        '',
+        _otOf(list),
+        formatYen(summary.amountOf(kind)),
+      ]);
+    }
+  } else {
+    rows.addAll(summary.workers.map(row));
+  }
   return _table(
-    title: '職人別',
+    title: summary.hasContractor ? '従業員・外注別' : '職人別',
     headers: const ['職人', '区分', '日数', '人工', '時間', '残業', '金額'],
-    rows: [
-      for (final w in summary.workers)
-        [
-          _clip(w.worker.name, 10),
-          w.payType.label,
-          '${w.days}日',
-          formatUnits(w.units),
-          w.payType == PayType.hourly ? formatHours(w.hours) : '-',
-          w.overtimeHours > 0 ? formatHours(w.overtimeHours) : '-',
-          formatYen(w.amount),
-        ],
-    ],
+    rows: rows,
+    boldRows: bold,
     total: [
       '合計',
       '',
@@ -266,6 +335,41 @@ pw.Widget _workerTable(MonthSummary summary) {
       summary.overtimeHours > 0 ? formatHours(summary.overtimeHours) : '-',
       formatYen(summary.amount),
     ],
+  );
+}
+
+String _otOf(List<WorkerTotal> list) {
+  final ot = list.fold(0.0, (sum, w) => sum + w.overtimeHours);
+  return ot > 0 ? formatHours(ot) : '-';
+}
+
+/// True when someone was split over several 現場 or has a 夜勤 entry.
+bool _needsBreakdown(MonthSummary summary) {
+  return summary.workers.any(
+    (w) => w.breakdown.length > 1 || w.nightDays.isNotEmpty,
+  );
+}
+
+pw.Widget _breakdownTable(MonthSummary summary) {
+  return _table(
+    title: '現場・昼夜別の内訳',
+    headers: const ['職人', '現場', '昼夜', '日数', '人工', '金額'],
+    rows: [
+      for (final w in summary.workers)
+        for (final b in w.breakdown)
+          [
+            w.kind == WorkerKind.contractor
+                ? '${_clip(w.worker.name, 7)}（外注）'
+                : _clip(w.worker.name, 10),
+            _clip(b.site.name, 16),
+            b.shift.label,
+            '${b.days}日',
+            formatUnits(b.units),
+            formatYen(b.amount),
+          ],
+    ],
+    total: null,
+    note: summary.hasMonthly ? monthlySiteNote : null,
   );
 }
 
@@ -303,6 +407,8 @@ pw.Widget _table({
   required List<String> headers,
   required List<List<String>> rows,
   required List<String>? total,
+  Set<int> boldRows = const {},
+  String? note,
 }) {
   pw.Widget text(String value, {bool bold = false, bool right = false}) {
     return pw.Container(
@@ -343,11 +449,18 @@ pw.Widget _table({
                 text(headers[i], bold: true, right: i > 0),
             ],
           ),
-          for (final row in rows)
+          for (var r = 0; r < rows.length; r++)
             pw.TableRow(
+              decoration: boldRows.contains(r)
+                  ? const pw.BoxDecoration(color: _zebra)
+                  : null,
               children: [
-                for (var i = 0; i < row.length; i++)
-                  text(row[i], right: i > 0, bold: i == last),
+                for (var i = 0; i < rows[r].length; i++)
+                  text(
+                    rows[r][i],
+                    right: i > 0,
+                    bold: i == last || boldRows.contains(r),
+                  ),
               ],
             ),
           if (total != null)
@@ -360,6 +473,10 @@ pw.Widget _table({
             ),
         ],
       ),
+      if (note != null) ...[
+        pw.SizedBox(height: 4),
+        pw.Text(note, style: const pw.TextStyle(color: _muted, fontSize: 7)),
+      ],
     ],
   );
 }
@@ -387,10 +504,21 @@ pw.Widget _footer(int page, int pages) {
   );
 }
 
-String _mark(double? units) {
+/// One cell of the grid. A single 1 or 0.5 shows ○ / 半; several entries or
+/// more than 1人工 show the day's total. 夜 marks a day with 夜勤.
+String _mark(double? units, {bool night = false}) {
   if (units == null || units <= 0) return '';
-  if (units >= 1) return '○';
-  return '半';
+  final base = units == 1
+      ? '○'
+      : units == 0.5
+      ? '半'
+      : formatUnits(units);
+  return night ? '$base夜' : base;
+}
+
+double _markSize(double? units, bool night) {
+  final longText = (units ?? 0) > 0 && (night || (units ?? 0) >= 10);
+  return longText ? 6.5 : 8;
 }
 
 String _clip(String value, int max) {

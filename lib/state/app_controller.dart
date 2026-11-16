@@ -143,10 +143,32 @@ class AppController extends ChangeNotifier {
     return sites.isEmpty ? null : sites.first;
   }
 
+  /// The first entry of [workerId] on [day] (昼 before 夜勤), or null.
   DayRecord? recordFor(String workerId, DateTime day) {
+    final all = recordsFor(workerId, day);
+    return all.isEmpty ? null : all.first;
+  }
+
+  /// Every entry of [workerId] on [day]: 昼 before 夜勤, then in the order
+  /// they were added.
+  List<DayRecord> recordsFor(String workerId, DateTime day) {
     final key = dayKey(day);
+    final found = [
+      for (final r in records)
+        if (r.workerId == workerId && r.day == key) r,
+    ];
+    // Stable: List.sort is not, so order by (shift, original index).
+    final order = {for (var i = 0; i < found.length; i++) found[i].id: i};
+    found.sort((a, b) {
+      final byShift = a.shift.index.compareTo(b.shift.index);
+      return byShift != 0 ? byShift : order[a.id]!.compareTo(order[b.id]!);
+    });
+    return found;
+  }
+
+  DayRecord? recordById(String id) {
     for (final r in records) {
-      if (r.workerId == workerId && r.day == key) return r;
+      if (r.id == id) return r;
     }
     return null;
   }
@@ -185,11 +207,17 @@ class AppController extends ChangeNotifier {
     PayType payType = PayType.daily,
     int hourlyRate = 0,
     int monthlySalary = 0,
+    WorkerKind kind = WorkerKind.employee,
   }) async {
     if (!canAddWorker) throw const LimitReached(LimitKind.workers);
     final worker = Worker(
       id: createId(),
-      name: _requiredLine(name, '名前', 20),
+      name: _requiredLine(
+        name,
+        kind == WorkerKind.contractor ? '会社名' : '名前',
+        20,
+      ),
+      kind: kind,
       payType: payType,
       dayRate: _yen(dayRate, '日当'),
       hourlyRate: _yen(hourlyRate, '時給'),
@@ -214,12 +242,18 @@ class AppController extends ChangeNotifier {
     PayType? payType,
     int? hourlyRate,
     int? monthlySalary,
+    WorkerKind? kind,
   }) async {
     final index = workers.indexWhere((w) => w.id == id);
     if (index < 0) throw const InvalidInput('職人が見つかりません。');
     final current = workers[index];
     final updated = current.copyWith(
-      name: _requiredLine(name, '名前', 20),
+      name: _requiredLine(
+        name,
+        (kind ?? current.kind) == WorkerKind.contractor ? '会社名' : '名前',
+        20,
+      ),
+      kind: kind,
       payType: payType,
       dayRate: _yen(dayRate ?? current.dayRate, '日当'),
       hourlyRate: _yen(hourlyRate ?? current.hourlyRate, '時給'),
@@ -237,7 +271,12 @@ class AppController extends ChangeNotifier {
             hourlyRate: updated.hourlyRate,
             monthlySalary: updated.monthlySalary,
             overtimeRate: updated.overtimeRate,
-            hours: r.hours > 0 ? r.hours : r.units * defaultWorkHours,
+            hours: updated.payType == PayType.hourly
+                ? (r.hours > 0 ? r.hours : r.units * defaultWorkHours).clamp(
+                    0.5,
+                    24.0,
+                  )
+                : r.hours,
           )
         else
           r,
@@ -325,8 +364,9 @@ class AppController extends ChangeNotifier {
 
   // ---------------------------------------------------------------- records
 
-  /// One tap: none -> 1人工 -> 0.5人工 -> none. New records go to the
-  /// selected site. Returns the record now on that day, or null.
+  /// One tap: none -> 1人工 -> 0.5人工 -> none, on the worker's first entry
+  /// of the day. New entries go to the selected site. Returns that entry
+  /// now, or null when it was removed.
   Future<DayRecord?> tapWorker(String workerId, DateTime day) async {
     final worker = workerById(workerId);
     if (worker == null) throw const InvalidInput('職人が見つかりません。');
@@ -337,32 +377,42 @@ class AppController extends ChangeNotifier {
       final site = selectedSite;
       if (site == null) throw const InvalidInput('先に現場を登録してください。');
       next = newRecord(worker, dayKey(day), site.id);
-    } else if (current.units >= 1) {
+      await _replace(null, next);
+    } else if (current.units > 0.5) {
       // Half day: an hourly worker's default 8h becomes 4h. Hours the user
-      // typed in are kept.
+      // typed in are kept. A crew of more than 1人工 goes back to 1人工.
       next = current.copyWith(
-        units: 0.5,
-        hours: current.hours == defaultWorkHours
+        units: current.units > 1 ? 1 : 0.5,
+        hours: current.units > 1
+            ? current.hours
+            : current.hours == defaultWorkHours
             ? defaultWorkHours / 2
             : current.hours,
       );
+      await _replace(current.id, next);
     } else {
-      next = null;
+      await _replace(current.id, null);
     }
-    await _replace(workerId, day, next);
     return next;
   }
 
   /// A full day (1人工) for [worker] with its current pay type and rates.
-  static DayRecord newRecord(Worker worker, String day, String siteId) {
+  static DayRecord newRecord(
+    Worker worker,
+    String day,
+    String siteId, {
+    double units = 1,
+    Shift shift = Shift.day,
+  }) {
     return DayRecord(
+      shift: shift,
       workerId: worker.id,
       day: day,
       siteId: siteId,
-      units: 1,
+      units: units,
       overtimeHours: 0,
       payType: worker.payType,
-      hours: worker.payType == PayType.hourly ? defaultWorkHours : 0,
+      hours: worker.payType == PayType.hourly ? units * defaultWorkHours : 0,
       dayRate: worker.dayRate,
       hourlyRate: worker.hourlyRate,
       monthlySalary: worker.monthlySalary,
@@ -370,8 +420,12 @@ class AppController extends ChangeNotifier {
     );
   }
 
-  /// [hours] is the working time of an hourly worker (0.5〜24h). Other pay
-  /// types ignore it.
+  /// Adds an entry ([recordId] null) or edits one. A worker can have several
+  /// entries on a day, but not two for the same 現場 and 昼/夜勤.
+  ///
+  /// [units] is 0.5 or 1 for 時給 and 月給 workers, and any 0.5 step up to
+  /// [maxUnitsPerRecord] for 日当 (a 外注 crew). [hours] is the working time
+  /// of an hourly worker (0.5〜24h). Other pay types ignore it.
   Future<void> setRecord({
     required String workerId,
     required DateTime day,
@@ -379,19 +433,34 @@ class AppController extends ChangeNotifier {
     required double units,
     required double overtimeHours,
     double? hours,
+    String? recordId,
+    Shift shift = Shift.day,
   }) async {
     final worker = workerById(workerId);
     if (worker == null) throw const InvalidInput('職人が見つかりません。');
     if (siteById(siteId) == null) throw const InvalidInput('現場が見つかりません。');
     _ensureMonthOpen(day);
-    if (units != 1 && units != 0.5) {
-      throw const InvalidInput('人工は1か0.5を選んでください。');
+    final existing = recordId == null ? null : recordById(recordId);
+    if (recordId != null && existing == null) {
+      throw const InvalidInput('出面が見つかりません。');
     }
+    final base = existing ?? newRecord(worker, dayKey(day), siteId);
+    _checkUnits(units, base.payType);
     if (overtimeHours < 0 || overtimeHours > 12) {
       throw const InvalidInput('残業は0〜12時間で入力してください。');
     }
-    final existing = recordFor(workerId, day);
-    final base = existing ?? newRecord(worker, dayKey(day), siteId);
+    final key = dayKey(day);
+    final clash = records.any(
+      (r) =>
+          r.id != existing?.id &&
+          r.workerId == workerId &&
+          r.day == key &&
+          r.siteId == siteId &&
+          r.shift == shift,
+    );
+    if (clash) {
+      throw const InvalidInput('同じ現場・同じ昼夜の出面がすでにあります。そちらを編集してください。');
+    }
     var workHours = 0.0;
     if (base.payType == PayType.hourly) {
       workHours = hours ?? units * defaultWorkHours;
@@ -400,23 +469,49 @@ class AppController extends ChangeNotifier {
       }
     }
     await _replace(
-      workerId,
-      day,
+      existing?.id,
       base.copyWith(
         siteId: siteId,
         units: units,
         overtimeHours: overtimeHours,
         hours: workHours,
+        shift: shift,
       ),
     );
   }
 
-  Future<void> clearRecord(String workerId, DateTime day) async {
-    await _replace(workerId, day, null);
+  void _checkUnits(double units, PayType payType) {
+    if (payType != PayType.daily) {
+      if (units != 1 && units != 0.5) {
+        throw const InvalidInput('人工は1か0.5を選んでください。');
+      }
+      return;
+    }
+    final steps = units * 2;
+    if (units <= 0 || steps != steps.roundToDouble()) {
+      throw const InvalidInput('人工は0.5単位で入力してください。');
+    }
+    if (units > maxUnitsPerRecord) {
+      throw InvalidInput('人工は${formatUnits(maxUnitsPerRecord)}までです。');
+    }
   }
 
-  /// Marks every worker without a record as 1人工 at the selected site.
-  /// Returns how many were added.
+  /// Removes every entry of [workerId] on [day].
+  Future<void> clearRecord(String workerId, DateTime day) async {
+    final key = dayKey(day);
+    await _commit([
+      for (final r in records)
+        if (!(r.workerId == workerId && r.day == key)) r,
+    ]);
+  }
+
+  /// Removes one entry.
+  Future<void> clearRecordById(String id) async {
+    await _replace(id, null);
+  }
+
+  /// Marks every 従業員 without an entry as 1人工 at the selected site.
+  /// 外注 are left out (they need a crew size). Returns how many were added.
   Future<int> markAll(DateTime day) async {
     _ensureMonthOpen(day);
     final site = selectedSite;
@@ -424,6 +519,7 @@ class AppController extends ChangeNotifier {
     final key = dayKey(day);
     final added = <DayRecord>[];
     for (final w in workers) {
+      if (w.kind == WorkerKind.contractor) continue;
       if (recordFor(w.id, day) != null) continue;
       added.add(newRecord(w, key, site.id));
     }
@@ -434,14 +530,19 @@ class AppController extends ChangeNotifier {
     return added.length;
   }
 
-  Future<void> _replace(String workerId, DateTime day, DayRecord? next) async {
-    final key = dayKey(day);
-    final previous = records;
-    records = [
+  /// Replaces the entry with [id] by [next], removes it when [next] is null,
+  /// or adds [next] when [id] is null.
+  Future<void> _replace(String? id, DayRecord? next) {
+    return _commit([
       for (final r in records)
-        if (!(r.workerId == workerId && r.day == key)) r,
-      ?next,
-    ];
+        if (r.id == id) ...[?next] else r,
+      if (id == null) ?next,
+    ]);
+  }
+
+  Future<void> _commit(List<DayRecord> updated) async {
+    final previous = records;
+    records = updated;
     notifyListeners();
     try {
       await repository.saveRecords(records);
