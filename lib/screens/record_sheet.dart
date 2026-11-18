@@ -130,7 +130,7 @@ class _RecordSheetState extends State<_RecordSheet> {
     final amount = wage + _allowance;
 
     return SafeArea(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(
           20,
           0,
