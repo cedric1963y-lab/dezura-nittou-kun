@@ -32,4 +32,6 @@ shot 01-area-site-dialog 12
 shot 02-allowance-sheet 14
 shot 03-summary-split 1
 shot 04-toolbox 13
+shot 05-expenses-sheet 15
+shot 06-worker-pdf 16
 echo "saved to $OUT"

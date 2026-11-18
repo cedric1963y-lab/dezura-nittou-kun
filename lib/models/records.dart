@@ -314,6 +314,8 @@ class DayRecord {
     this.monthlySalary = 0,
     this.allowance = 0,
     this.allowanceMemo = '',
+    this.transport = 0,
+    this.parking = 0,
   }) : id = id ?? createId();
 
   /// Unique per entry. Files before 1.0.6 get `workerId@day`.
@@ -352,6 +354,13 @@ class DayRecord {
   /// Optional memo for [allowance].
   final String allowanceMemo;
 
+  /// 交通費: optional travel expense in yen. Not part of 日当.
+  /// Files before this field have none.
+  final int transport;
+
+  /// 駐車場代: optional parking expense in yen. Not part of 日当.
+  final int parking;
+
   int get overtimeAmount => (overtimeRate * overtimeHours).round();
 
   /// Pay for this day. 日当: 人工 x 日当. 時給: hours x 時給. 月給: none here
@@ -382,6 +391,8 @@ class DayRecord {
     monthlySalary: monthlySalary,
     allowance: allowance,
     allowanceMemo: allowanceMemo,
+    transport: transport,
+    parking: parking,
   );
 
   DayRecord copyWith({
@@ -397,6 +408,8 @@ class DayRecord {
     Shift? shift,
     int? allowance,
     String? allowanceMemo,
+    int? transport,
+    int? parking,
   }) {
     return DayRecord(
       id: id,
@@ -414,6 +427,8 @@ class DayRecord {
       monthlySalary: monthlySalary ?? this.monthlySalary,
       allowance: allowance ?? this.allowance,
       allowanceMemo: allowanceMemo ?? this.allowanceMemo,
+      transport: transport ?? this.transport,
+      parking: parking ?? this.parking,
     );
   }
 
@@ -433,6 +448,8 @@ class DayRecord {
     'overtimeRate': overtimeRate,
     'allowance': allowance,
     'allowanceMemo': allowanceMemo,
+    'transport': transport,
+    'parking': parking,
   };
 
   static DayRecord fromJson(Map<String, dynamic> json) {
@@ -455,6 +472,8 @@ class DayRecord {
       overtimeRate: _int(json['overtimeRate']),
       allowance: _int(json['allowance']),
       allowanceMemo: (json['allowanceMemo'] as String?) ?? '',
+      transport: _int(json['transport']),
+      parking: _int(json['parking']),
     );
   }
 }

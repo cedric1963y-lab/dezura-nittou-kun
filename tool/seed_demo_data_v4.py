@@ -24,7 +24,7 @@ rates = {w[0]: (w[3], w[4]) for w in workers}
 records = []
 
 
-def add(w, day, site, units, ot=0, shift="day", allowance=0, memo=""):
+def add(w, day, site, units, ot=0, shift="day", allowance=0, memo="", transport=0, parking=0):
     rate, otr = rates[w]
     records.append({
         "id": f"{w}-{day}-{site}-{shift}",
@@ -42,6 +42,8 @@ def add(w, day, site, units, ot=0, shift="day", allowance=0, memo=""):
         "overtimeRate": otr,
         "allowance": allowance,
         "allowanceMemo": memo,
+        "transport": transport,
+        "parking": parking,
     })
 
 
@@ -54,7 +56,7 @@ for d in range(1, today.day + 1):
         add("w1", k, "s-area", 1)
         add("w2", k, "s-area", 0.5)
         add("w1", k, "s1", 1, 0, "day", 5000, "搬入が大変だった")
-        add("w2", k, "s1", 1)
+        add("w2", k, "s1", 1, 0, "day", 0, "", 800, 1500)
         continue
     # A few 平米 days (no 日当), plus regular 日当 days.
     if d % 3 == 1:

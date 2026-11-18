@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:dezura_nittou/app_scope.dart';
+import 'package:dezura_nittou/format.dart';
 import 'package:dezura_nittou/logic/summary.dart';
 import 'package:dezura_nittou/models/records.dart';
 import 'package:dezura_nittou/plan/limits.dart';
@@ -374,11 +375,17 @@ void main() {
       expect(c.sites.single.areaTotal, 0);
       expect(c.records.single.allowance, 0);
       expect(c.records.single.allowanceMemo, '');
+      expect(c.records.single.transport, 0);
+      expect(c.records.single.parking, 0);
       final s = c.summaryFor(DateTime(2026, 10));
       expect(s.amount, 18000 + 5000);
       expect(s.hasArea, isFalse);
       expect(s.hasAllowance, isFalse);
+      expect(s.hasTransport, isFalse);
+      expect(s.hasParking, isFalse);
       expect(summaryAsText(s), isNot(contains('色付け')));
+      expect(summaryAsText(s), isNot(contains('交通費')));
+      expect(summaryAsText(s), isNot(contains('駐車場代')));
       expect(summaryAsText(s), isNot(contains('平米割り')));
 
       // Saving records rewrites them in v4. sites.json stays at v3 until a
@@ -393,6 +400,8 @@ void main() {
       expect(sitesBefore['version'], 3);
       expect(records['version'], 4);
       expect(records['records'][0]['allowance'], 0);
+      expect(records['records'][0]['transport'], 0);
+      expect(records['records'][0]['parking'], 0);
       await c.updateSite(id: 's1', name: '港北');
       final sites = jsonDecode(
         File(p.join(directory.path, 'sites.json')).readAsStringSync(),
@@ -408,11 +417,129 @@ void main() {
     });
   });
 
+
+  group('交通費・駐車場代', () {
+    test('are separate 経費 from 日当 and 色付け, hidden when unused', () async {
+      final c = await openController(directory, premium: true);
+      final site = await c.addSite(name: 'A');
+      final w = await c.addWorker(name: '山田', dayRate: 18000);
+      await c.setRecord(
+        workerId: w.id,
+        day: DateTime(2026, 10, 1),
+        siteId: site.id,
+        units: 1,
+        overtimeHours: 0,
+        transport: 800,
+        parking: 1500,
+      );
+      await c.setRecord(
+        workerId: w.id,
+        day: DateTime(2026, 10, 2),
+        siteId: site.id,
+        units: 1,
+        overtimeHours: 0,
+      );
+      final s = c.summaryFor(DateTime(2026, 10));
+      expect(s.hasTransport, isTrue);
+      expect(s.hasParking, isTrue);
+      expect(s.transportTotal, 800);
+      expect(s.parkingTotal, 1500);
+      expect(s.wageTotal, 36000);
+      expect(s.amount, 38300);
+      final text = summaryAsText(s);
+      expect(text, contains('└ 日当　¥36,000'));
+      expect(text, contains('└ 交通費　¥800'));
+      expect(text, contains('└ 駐車場代　¥1,500'));
+      expect(text, isNot(contains('色付け')));
+      final csv = summaryAsCsv(s);
+      expect(
+        csv,
+        startsWith('\uFEFF日付,職人,現場,人工,残業時間,日当,残業単価,金額,区分,勤務時間,時給,昼夜,従業員外注,交通費,駐車場代'),
+      );
+      expect(
+        csv,
+        contains('2026-10-01,山田,A,1,0,18000,0,18000,日当,,,昼,従業員,800,1500'),
+      );
+      expect(csv, contains('2026-10-02,山田,A,1,0,18000,0,18000,日当,,,昼,従業員,,'));
+      expect(csv, contains('合計,,,2,0,,,38300,,,,,,,'));
+      c.dispose();
+    });
+
+    test('経費 on a 平米 site is added on top of the split, still no 日当', () async {
+      final c = await openController(directory, premium: true);
+      final site = await c.addSite(
+        name: 'A',
+        isAreaSite: true,
+        areaAmountMode: AreaAmountMode.contract,
+        contractAmount: 10000,
+        settlementMonth: '2026-10',
+      );
+      final w = await c.addWorker(name: '山田', dayRate: 18000);
+      await c.setRecord(
+        workerId: w.id,
+        day: DateTime(2026, 10, 1),
+        siteId: site.id,
+        units: 1,
+        overtimeHours: 0,
+        transport: 500,
+        parking: 1000,
+      );
+      final s = c.summaryFor(DateTime(2026, 10));
+      expect(s.wageTotal, 0);
+      expect(s.areaTotal, 10000);
+      expect(s.transportTotal, 500);
+      expect(s.parkingTotal, 1000);
+      expect(s.amount, 11500);
+      expect(summaryAsText(s), isNot(contains('└ 日当')));
+      c.dispose();
+    });
+  });
+
+  group('個人明細', () {
+    test('workerDayLines include only that worker, with 経費 and 平米 share on the total', () async {
+      final c = await openController(directory, premium: true);
+      final site = await c.addSite(name: 'A');
+      final a = await c.addWorker(name: 'Aさん', dayRate: 20000);
+      final b = await c.addWorker(name: 'Bさん', dayRate: 18000);
+      await c.setRecord(
+        workerId: a.id,
+        day: DateTime(2026, 10, 1),
+        siteId: site.id,
+        units: 1,
+        overtimeHours: 0,
+        allowance: 2000,
+        transport: 800,
+        parking: 1000,
+      );
+      await c.setRecord(
+        workerId: b.id,
+        day: DateTime(2026, 10, 1),
+        siteId: site.id,
+        units: 1,
+        overtimeHours: 0,
+        transport: 300,
+      );
+      final s = c.summaryFor(DateTime(2026, 10));
+      final lines = workerDayLines(s, a.id);
+      expect(lines, hasLength(1));
+      expect(lines.single.record.workerId, a.id);
+      expect(lines.single.wage, 20000);
+      expect(lines.single.allowance, 2000);
+      expect(lines.single.transport, 800);
+      expect(lines.single.parking, 1000);
+      expect(lines.single.amount, 23800);
+      expect(workerDayLines(s, b.id).single.amount, 18300);
+      expect(s.workers.where((w) => w.worker.id == a.id).single.amount, 23800);
+      expect(exportWorkerFileName(DateTime(2026, 10), 'Aさん', 'pdf'), '出面日当_2026年10月_Aさん.pdf');
+      c.dispose();
+    });
+  });
+
   group('version and 道具箱', () {
     test('AppInfo and pubspec are 1.0.7', () {
       expect(AppInfo.version, '1.0.7');
       final pubspec = File('pubspec.yaml').readAsStringSync();
-      expect(pubspec, contains('version: 1.0.7+9'));
+      expect(pubspec, contains('version: 1.0.7+10'));
     });
 
     test('職人の道具箱 lists the other five construction apps, 見積 first', () {
@@ -492,6 +619,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('月末の集計を、見積に使う'), findsOneWidget);
     expect(find.byKey(const Key('mitsumori-prompt')), findsOneWidget);
+    expect(find.text('共有'), findsWidgets);
     c.dispose();
   });
 }

@@ -10,13 +10,15 @@ import 'premium_screen.dart';
 import 'roster_screen.dart';
 import 'settings_screen.dart';
 import 'summary_screen.dart';
+import 'worker_pdf_screen.dart';
 
 /// Bottom tabs: 出面 / 集計 / 名簿 / 設定.
 class HomeShell extends StatefulWidget {
   const HomeShell({this.startTab = 0, super.key});
 
   /// 0-3 picks a tab. Debug screenshot runs also use 10 (集計 then 出力),
-  /// 11 (プレミアム), 12 (平米の現場の編集), 13 (職人の道具箱), 14 (色付け).
+  /// 11 (プレミアム), 12 (平米の現場の編集), 13 (職人の道具箱), 14 (色付け),
+  /// 15 (交通費・駐車場代), 16 (個人明細PDF).
   final int startTab;
 
   @override
@@ -28,6 +30,7 @@ class _HomeShellState extends State<HomeShell> {
     10 => 1,
     12 => 2,
     13 => 3,
+    16 => 1,
     _ => widget.startTab.clamp(0, 3),
   };
 
@@ -53,9 +56,13 @@ class _HomeShellState extends State<HomeShell> {
           );
           return;
         }
-        if (widget.startTab == 14) {
+        if (widget.startTab == 14 || widget.startTab == 15) {
           final c = AppScope.of(context);
-          final rec = c.records.where((r) => r.allowance > 0).firstOrNull;
+          final rec = widget.startTab == 14
+              ? c.records.where((r) => r.allowance > 0).firstOrNull
+              : c.records
+                  .where((r) => r.transport > 0 || r.parking > 0)
+                  .firstOrNull;
           final worker = rec == null ? null : c.workerById(rec.workerId);
           final day = rec == null ? null : tryParseDayKey(rec.day);
           if (worker != null && day != null) {
@@ -64,6 +71,22 @@ class _HomeShellState extends State<HomeShell> {
               worker: worker,
               day: day,
               recordId: rec!.id,
+            );
+          }
+          return;
+        }
+        if (widget.startTab == 16) {
+          final c = AppScope.of(context);
+          final month = DateTime(c.now.year, c.now.month);
+          final first = c.summaryFor(month).workers.firstOrNull;
+          if (first != null) {
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => WorkerPdfScreen(
+                  month: month,
+                  workerId: first.worker.id,
+                ),
+              ),
             );
           }
         }

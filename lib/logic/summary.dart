@@ -16,6 +16,8 @@ class WorkerTotal {
     this.salary = 0,
     this.wageAmount = 0,
     this.allowance = 0,
+    this.transport = 0,
+    this.parking = 0,
     this.areaAmount = 0,
   });
 
@@ -51,6 +53,12 @@ class WorkerTotal {
   /// 色付け in this month. Already in [amount].
   final int allowance;
 
+  /// 交通費 in this month. Already in [amount].
+  final int transport;
+
+  /// 駐車場代 in this month. Already in [amount].
+  final int parking;
+
   /// This worker's share of 平米/請負 amounts settling this month.
   /// Already in [amount].
   final int areaAmount;
@@ -76,6 +84,8 @@ class BreakdownRow {
     required this.days,
     this.wageAmount = 0,
     this.allowance = 0,
+    this.transport = 0,
+    this.parking = 0,
   });
 
   final Worker worker;
@@ -88,6 +98,8 @@ class BreakdownRow {
   final int amount;
   final int wageAmount;
   final int allowance;
+  final int transport;
+  final int parking;
   final int days;
 }
 
@@ -100,6 +112,8 @@ class SiteTotal {
     this.nightUnits = 0,
     this.wageAmount = 0,
     this.allowance = 0,
+    this.transport = 0,
+    this.parking = 0,
     this.areaAmount = 0,
     this.allUnits = 0,
   });
@@ -118,6 +132,8 @@ class SiteTotal {
   final int amount;
   final int wageAmount;
   final int allowance;
+  final int transport;
+  final int parking;
 
   /// Lump 平米/請負 amount counted in this month (0 otherwise).
   final int areaAmount;
@@ -168,10 +184,14 @@ class MonthSummary {
   /// 月給 in [amount]. Site totals do not include it.
   int get salaryTotal => workers.fold(0, (sum, w) => sum + w.salary);
   int get allowanceTotal => workers.fold(0, (sum, w) => sum + w.allowance);
+  int get transportTotal => workers.fold(0, (sum, w) => sum + w.transport);
+  int get parkingTotal => workers.fold(0, (sum, w) => sum + w.parking);
   int get areaTotal => workers.fold(0, (sum, w) => sum + w.areaAmount);
   int get wageTotal => workers.fold(0, (sum, w) => sum + w.wageAmount);
   bool get hasMonthly => workers.any((w) => w.payType == PayType.monthly);
   bool get hasAllowance => allowanceTotal > 0;
+  bool get hasTransport => transportTotal > 0;
+  bool get hasParking => parkingTotal > 0;
   bool get hasArea => areaTotal > 0 || sites.any((s) => s.areaAmount > 0);
   int get workingDays => records.map((r) => r.day).toSet().length;
   bool get isEmpty => records.isEmpty && workers.isEmpty;
@@ -295,6 +315,8 @@ MonthSummary summarizeMonth({
         if (part.isEmpty) continue;
         final wage = part.fold(0, (sum, r) => sum + wageOf(r, site));
         final allowance = part.fold(0, (sum, r) => sum + r.allowance);
+        final transport = part.fold(0, (sum, r) => sum + r.transport);
+        final parking = part.fold(0, (sum, r) => sum + r.parking);
         breakdown.add(
           BreakdownRow(
             worker: worker,
@@ -303,7 +325,9 @@ MonthSummary summarizeMonth({
             units: part.fold(0, (sum, r) => sum + r.units),
             wageAmount: wage,
             allowance: allowance,
-            amount: wage + allowance,
+            transport: transport,
+            parking: parking,
+            amount: wage + allowance + transport + parking,
             days: part.map((r) => r.day).toSet().length,
           ),
         );
@@ -311,9 +335,13 @@ MonthSummary summarizeMonth({
     }
     var wage = 0;
     var allowance = 0;
+    var transport = 0;
+    var parking = 0;
     for (final r in mine) {
       wage += wageOf(r, siteById[r.siteId]!);
       allowance += r.allowance;
+      transport += r.transport;
+      parking += r.parking;
     }
     final areaAmount = areaByWorker[worker.id] ?? 0;
     final payType = mine.isNotEmpty ? mine.last.payType : worker.payType;
@@ -327,11 +355,13 @@ MonthSummary summarizeMonth({
         salary: salary,
         wageAmount: wage,
         allowance: allowance,
+        transport: transport,
+        parking: parking,
         areaAmount: areaAmount,
         days: mine.map((r) => r.day).toSet().length,
         units: mine.fold(0, (sum, r) => sum + r.units),
         overtimeHours: mine.fold(0, (sum, r) => sum + r.overtimeHours),
-        amount: wage + allowance + areaAmount + salary,
+        amount: wage + allowance + transport + parking + areaAmount + salary,
         unitsByDay: unitsByDay,
         nightDays: {
           for (final r in mine)
@@ -350,6 +380,8 @@ MonthSummary summarizeMonth({
     if (here.isEmpty && areaAmount == 0) continue;
     final wage = here.fold(0, (sum, r) => sum + wageOf(r, site));
     final allowance = here.fold(0, (sum, r) => sum + r.allowance);
+    final transport = here.fold(0, (sum, r) => sum + r.transport);
+    final parking = here.fold(0, (sum, r) => sum + r.parking);
     final workerCount = {
       ...here.map((r) => r.workerId),
       ...?areaSiteWorkers[site.id],
@@ -362,8 +394,10 @@ MonthSummary summarizeMonth({
             here.fold(0, (sum, r) => sum + r.units),
         wageAmount: wage,
         allowance: allowance,
+        transport: transport,
+        parking: parking,
         areaAmount: areaAmount,
-        amount: wage + allowance + areaAmount,
+        amount: wage + allowance + transport + parking + areaAmount,
         workerCount: workerCount,
         nightUnits: here
             .where((r) => r.shift == Shift.night)
@@ -405,13 +439,22 @@ String summaryAsText(MonthSummary summary) {
           b.writeln('　└ ${breakdownLabel(row)}　${formatUnits(row.units)}人工');
         }
       }
-      // 色付け and 平米割り are separate from 日当, and hidden when unused.
-      if (w.allowance > 0 || w.areaAmount > 0) {
+      // 色付け, 経費 and 平米割り are separate from 日当, and hidden when unused.
+      if (w.allowance > 0 ||
+          w.transport > 0 ||
+          w.parking > 0 ||
+          w.areaAmount > 0) {
         if (w.wageAmount > 0 || w.salary > 0) {
           b.writeln('　└ 日当　${formatYen(w.wageAmount + w.salary)}');
         }
         if (w.allowance > 0) {
           b.writeln('　└ 色付け　${formatYen(w.allowance)}');
+        }
+        if (w.transport > 0) {
+          b.writeln('　└ 交通費　${formatYen(w.transport)}');
+        }
+        if (w.parking > 0) {
+          b.writeln('　└ 駐車場代　${formatYen(w.parking)}');
         }
         if (w.areaAmount > 0) {
           b.writeln('　└ 平米割り　${formatYen(w.areaAmount)}');
@@ -446,12 +489,21 @@ String summaryAsText(MonthSummary summary) {
     b.writeln(
       '${s.site.name}　${formatUnits(s.units)}人工$night　${formatYen(s.amount)}',
     );
-    if (s.allowance > 0 || s.areaAmount > 0) {
+    if (s.allowance > 0 ||
+        s.transport > 0 ||
+        s.parking > 0 ||
+        s.areaAmount > 0) {
       if (s.wageAmount > 0) {
         b.writeln('　└ 日当　${formatYen(s.wageAmount)}');
       }
       if (s.allowance > 0) {
         b.writeln('　└ 色付け　${formatYen(s.allowance)}');
+      }
+      if (s.transport > 0) {
+        b.writeln('　└ 交通費　${formatYen(s.transport)}');
+      }
+      if (s.parking > 0) {
+        b.writeln('　└ 駐車場代　${formatYen(s.parking)}');
       }
       if (s.areaAmount > 0) {
         b.writeln('　└ 平米割り　${formatYen(s.areaAmount)}');
@@ -497,17 +549,33 @@ String summaryAsCsv(MonthSummary summary) {
   final siteById = {for (final s in summary.sites) s.site.id: s.site};
   // The first 11 columns are the same as 1.0.5 (the first 8 as 1.0.4), so
   // existing sheets still work. 1.0.6 adds 昼夜 and 従業員/外注 at the end.
-  // 色付け columns are appended only when this month has 色付け.
+  // 色付け / 交通費 / 駐車場代 columns are appended only when this month has them.
   final showAllowance = summary.hasAllowance;
+  final showTransport = summary.hasTransport;
+  final showParking = summary.hasParking;
   final b = StringBuffer('\uFEFF')
     ..writeln(
       [
         '日付,職人,現場,人工,残業時間,日当,残業単価,金額,区分,勤務時間,時給,昼夜,従業員外注',
         if (showAllowance) ',色付け,色付けメモ',
+        if (showTransport) ',交通費',
+        if (showParking) ',駐車場代',
       ].join(),
     );
-  String tail(int allowance, String memo) =>
-      showAllowance ? ',${allowance > 0 ? allowance : ''},${_csv(memo)}' : '';
+  String extras({
+    int allowance = 0,
+    String memo = '',
+    int transport = 0,
+    int parking = 0,
+  }) {
+    final extra = StringBuffer();
+    if (showAllowance) {
+      extra.write(',${allowance > 0 ? allowance : ''},${_csv(memo)}');
+    }
+    if (showTransport) extra.write(',${transport > 0 ? transport : ''}');
+    if (showParking) extra.write(',${parking > 0 ? parking : ''}');
+    return extra.toString();
+  }
 
   for (final r in summary.records) {
     final site = siteById[r.siteId];
@@ -530,7 +598,7 @@ String summaryAsCsv(MonthSummary summary) {
         r.shift.label,
         (kinds[r.workerId] ?? WorkerKind.employee).label,
       ].join(',') +
-          tail(r.allowance, r.allowanceMemo),
+          extras(allowance: r.allowance, memo: r.allowanceMemo, transport: r.transport, parking: r.parking),
     );
   }
   for (final w in summary.workers) {
@@ -551,7 +619,7 @@ String summaryAsCsv(MonthSummary summary) {
         '',
         w.kind.label,
       ].join(',') +
-          tail(0, ''),
+          extras(),
     );
   }
   for (final w in summary.workers) {
@@ -573,18 +641,18 @@ String summaryAsCsv(MonthSummary summary) {
         '',
         w.kind.label,
       ].join(',') +
-          tail(0, ''),
+          extras(),
     );
   }
   if (summary.hasContractor) {
     for (final kind in WorkerKind.values) {
       b.writeln(
-        '${kind.label}小計,,,${formatUnits(summary.unitsOf(kind))},${formatUnits(summary.workersOf(kind).fold(0.0, (sum, w) => sum + w.overtimeHours))},,,${summary.amountOf(kind)},,,,,${kind.label}${tail(0, '')}',
+        '${kind.label}小計,,,${formatUnits(summary.unitsOf(kind))},${formatUnits(summary.workersOf(kind).fold(0.0, (sum, w) => sum + w.overtimeHours))},,,${summary.amountOf(kind)},,,,,${kind.label}${extras()}',
       );
     }
   }
   b.writeln(
-    '合計,,,${formatUnits(summary.units)},${formatUnits(summary.overtimeHours)},,,${summary.amount},,,,,${tail(0, '')}',
+    '合計,,,${formatUnits(summary.units)},${formatUnits(summary.overtimeHours)},,,${summary.amount},,,,,${extras()}',
   );
   return b.toString();
 }
@@ -595,3 +663,39 @@ String _csv(String value) {
   }
   return value;
 }
+
+/// One of a worker's 出面 days, for a personal PDF or share.
+class WorkerDayLine {
+  const WorkerDayLine({
+    required this.record,
+    required this.site,
+    required this.wage,
+  });
+
+  final DayRecord record;
+  final Site? site;
+  final int wage;
+
+  int get allowance => record.allowance;
+  int get transport => record.transport;
+  int get parking => record.parking;
+  int get amount => wage + allowance + transport + parking;
+}
+
+/// This worker's records only, oldest day first. No other workers.
+List<WorkerDayLine> workerDayLines(MonthSummary summary, String workerId) {
+  final siteById = {for (final s in summary.sites) s.site.id: s.site};
+  final mine = [
+    for (final r in summary.records)
+      if (r.workerId == workerId) r,
+  ];
+  return [
+    for (final r in mine)
+      WorkerDayLine(
+        record: r,
+        site: siteById[r.siteId],
+        wage: siteById[r.siteId] == null ? r.amount : wageOf(r, siteById[r.siteId]!),
+      ),
+  ];
+}
+

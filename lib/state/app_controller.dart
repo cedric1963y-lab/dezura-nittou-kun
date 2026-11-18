@@ -480,6 +480,8 @@ class AppController extends ChangeNotifier {
     Shift shift = Shift.day,
     int? allowance,
     String? allowanceMemo,
+    int? transport,
+    int? parking,
   }) async {
     final worker = workerById(workerId);
     if (worker == null) throw const InvalidInput('職人が見つかりません。');
@@ -517,6 +519,14 @@ class AppController extends ChangeNotifier {
     if (yen < 0 || yen > 1000000) {
       throw const InvalidInput('色付けは0〜1,000,000円で入力してください。');
     }
+    final travel = transport ?? base.transport;
+    if (travel < 0 || travel > 1000000) {
+      throw const InvalidInput('交通費は0〜1,000,000円で入力してください。');
+    }
+    final parkingYen = parking ?? base.parking;
+    if (parkingYen < 0 || parkingYen > 1000000) {
+      throw const InvalidInput('駐車場代は0〜1,000,000円で入力してください。');
+    }
     await _replace(
       existing?.id,
       base.copyWith(
@@ -527,6 +537,8 @@ class AppController extends ChangeNotifier {
         shift: shift,
         allowance: yen,
         allowanceMemo: _optionalLine(allowanceMemo ?? base.allowanceMemo, 40),
+        transport: travel,
+        parking: parkingYen,
       ),
     );
   }
@@ -636,6 +648,32 @@ class AppController extends ChangeNotifier {
     if (!premium) throw const LimitReached(LimitKind.export);
     final bytes = await pdfBytesFor(month);
     return repository.writeExport(exportFileName(month, 'pdf'), bytes);
+  }
+
+  /// Personal 出面 PDF for [workerId] only. Sharing the file is premium.
+  Future<Uint8List> pdfBytesForWorker(DateTime month, String workerId) async {
+    if (!canOpenMonth(month)) throw const LimitReached(LimitKind.history);
+    final summary = summaryFor(month);
+    final worker = summary.workers.where((w) => w.worker.id == workerId);
+    if (worker.isEmpty) {
+      throw const InvalidInput('この月の出面がありません。');
+    }
+    return buildWorkerMonthlyPdf(
+      fontData: await _fontData(),
+      summary: summary,
+      worker: worker.first,
+      title: businessName,
+    );
+  }
+
+  Future<String> exportWorkerPdf(DateTime month, String workerId) async {
+    if (!premium) throw const LimitReached(LimitKind.export);
+    final bytes = await pdfBytesForWorker(month, workerId);
+    final name = workerById(workerId)?.name ?? '職人';
+    return repository.writeExport(
+      exportWorkerFileName(month, name, 'pdf'),
+      bytes,
+    );
   }
 
   Future<String> exportCsv(DateTime month) async {

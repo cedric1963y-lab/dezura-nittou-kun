@@ -57,7 +57,10 @@ Future<Uint8List> buildMonthlyPdf({
             pw.Expanded(flex: 4, child: _siteTable(summary)),
           ],
         ),
-        if (summary.hasAllowance || summary.hasArea) ...[
+        if (summary.hasAllowance ||
+            summary.hasTransport ||
+            summary.hasParking ||
+            summary.hasArea) ...[
           pw.SizedBox(height: 14),
           _payBreakdownTable(summary),
         ],
@@ -350,6 +353,8 @@ pw.Widget _payBreakdownTable(MonthSummary summary) {
         : _clip(w.worker.name, 10),
     formatYen(w.wageAmount + w.salary),
     if (summary.hasAllowance) w.allowance > 0 ? formatYen(w.allowance) : '-',
+    if (summary.hasTransport) w.transport > 0 ? formatYen(w.transport) : '-',
+    if (summary.hasParking) w.parking > 0 ? formatYen(w.parking) : '-',
     if (summary.hasArea) w.areaAmount > 0 ? formatYen(w.areaAmount) : '-',
     formatYen(w.amount),
   ];
@@ -359,6 +364,8 @@ pw.Widget _payBreakdownTable(MonthSummary summary) {
       '職人',
       wageLabel,
       if (summary.hasAllowance) '色付け',
+      if (summary.hasTransport) '交通費',
+      if (summary.hasParking) '駐車場代',
       if (summary.hasArea) '平米割り',
       '合計',
     ],
@@ -367,6 +374,8 @@ pw.Widget _payBreakdownTable(MonthSummary summary) {
       '合計',
       formatYen(summary.wageTotal + summary.salaryTotal),
       if (summary.hasAllowance) formatYen(summary.allowanceTotal),
+      if (summary.hasTransport) formatYen(summary.transportTotal),
+      if (summary.hasParking) formatYen(summary.parkingTotal),
       if (summary.hasArea) formatYen(summary.areaTotal),
       formatYen(summary.amount),
     ],
@@ -565,4 +574,171 @@ String _clip(String value, int max) {
   final runes = value.runes.toList();
   if (runes.length <= max) return value;
   return '${String.fromCharCodes(runes.take(max - 1))}…';
+}
+
+
+/// Personal 出面明細 for one worker only (portrait A4). No other workers.
+Future<Uint8List> buildWorkerMonthlyPdf({
+  required ByteData fontData,
+  required MonthSummary summary,
+  required WorkerTotal worker,
+  required String title,
+}) async {
+  final font = pw.Font.ttf(fontData);
+  final theme = pw.ThemeData.withFont(
+    base: font,
+    bold: font,
+    italic: font,
+    boldItalic: font,
+  );
+  final month = summary.month;
+  final lines = workerDayLines(summary, worker.worker.id);
+  final showAllowance = worker.allowance > 0;
+  final showTransport = worker.transport > 0;
+  final showParking = worker.parking > 0;
+  final document = pw.Document(
+    title: '${worker.worker.name} ${formatMonth(month)}の出面',
+    author: '出面・日当くん',
+    creator: '出面・日当くん',
+    theme: theme,
+  );
+
+  List<String> headers() => [
+        '日付',
+        '現場',
+        '昼夜',
+        '人工',
+        '日当',
+        if (showAllowance) '色付け',
+        if (showTransport) '交通費',
+        if (showParking) '駐車場代',
+        '金額',
+      ];
+
+  List<String> dayRow(WorkerDayLine line) => [
+        line.record.day,
+        _clip(line.site?.name ?? '', 16),
+        line.record.shift.label,
+        formatUnits(line.record.units),
+        line.wage > 0 ? formatYen(line.wage) : '-',
+        if (showAllowance)
+          line.allowance > 0 ? formatYen(line.allowance) : '-',
+        if (showTransport)
+          line.transport > 0 ? formatYen(line.transport) : '-',
+        if (showParking) line.parking > 0 ? formatYen(line.parking) : '-',
+        formatYen(line.amount),
+      ];
+
+  List<String> extraRow(String label, int yen) => [
+        monthKey(month),
+        label,
+        '',
+        '',
+        '',
+        if (showAllowance) '',
+        if (showTransport) '',
+        if (showParking) '',
+        formatYen(yen),
+      ];
+
+  final rows = [for (final line in lines) dayRow(line)];
+  if (worker.salary > 0) rows.add(extraRow('月給', worker.salary));
+  if (worker.areaAmount > 0) rows.add(extraRow('平米割り', worker.areaAmount));
+
+  final kind = worker.kind == WorkerKind.contractor
+      ? '${worker.worker.name}（外注）'
+      : worker.worker.name;
+
+  document.addPage(
+    pw.MultiPage(
+      pageFormat: PdfPageFormat.a4,
+      margin: const pw.EdgeInsets.fromLTRB(28, 24, 28, 24),
+      theme: theme,
+      footer: (context) => _footer(context.pageNumber, context.pagesCount),
+      build: (context) => [
+        pw.Container(
+          padding: const pw.EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          color: _navy,
+          child: pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(
+                    '個人明細　${formatMonth(month)}',
+                    style: pw.TextStyle(
+                      color: PdfColors.white,
+                      fontSize: 18,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                  pw.Text(
+                    kind,
+                    style: const pw.TextStyle(
+                      color: PdfColors.white,
+                      fontSize: 12,
+                    ),
+                  ),
+                  if (title.trim().isNotEmpty)
+                    pw.Text(
+                      _clip(title.trim(), 40),
+                      style: const pw.TextStyle(
+                        color: PdfColors.white,
+                        fontSize: 9,
+                      ),
+                    ),
+                ],
+              ),
+              pw.Text(
+                '合計 ${formatYen(worker.amount)}',
+                style: pw.TextStyle(
+                  color: PdfColors.white,
+                  fontSize: 13,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ),
+        pw.Container(height: 3, color: _amber),
+        pw.SizedBox(height: 12),
+        if (rows.isEmpty)
+          pw.Text(
+            'この月の出面はまだありません。',
+            style: const pw.TextStyle(color: _muted, fontSize: 11),
+          )
+        else
+          _table(
+            title: '出面',
+            headers: headers(),
+            rows: rows,
+            total: [
+              '合計',
+              '${worker.days}日',
+              '',
+              formatUnits(worker.units),
+              formatYen(worker.wageAmount),
+              if (showAllowance) formatYen(worker.allowance),
+              if (showTransport) formatYen(worker.transport),
+              if (showParking) formatYen(worker.parking),
+              formatYen(worker.amount),
+            ],
+          ),
+        pw.SizedBox(height: 10),
+        pw.Text(
+          'この明細は${worker.worker.name}さんのみです。他の職人のデータは含みません。',
+          style: const pw.TextStyle(color: _muted, fontSize: 8),
+        ),
+        if (worker.areaAmount > 0) ...[
+          pw.SizedBox(height: 4),
+          pw.Text(
+            areaSiteNote,
+            style: const pw.TextStyle(color: _muted, fontSize: 7),
+          ),
+        ],
+      ],
+    ),
+  );
+  return document.save();
 }

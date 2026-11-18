@@ -88,6 +88,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
               _SectionTitle(kind.label),
               _WorkerList(
                 workers: summary.workersOf(kind),
+                month: summary.month,
                 subtotalLabel: '${kind.label} 小計',
                 subtotalUnits: summary.unitsOf(kind),
                 subtotalAmount: summary.amountOf(kind),
@@ -118,7 +119,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
           ),
         ] else ...[
           const _SectionTitle('職人別'),
-          _WorkerList(workers: summary.workers),
+          _WorkerList(workers: summary.workers, month: summary.month),
         ],
         const SizedBox(height: 16),
         const _SectionTitle('現場別'),
@@ -136,11 +137,17 @@ class _SummaryScreenState extends State<SummaryScreen> {
                       '${formatUnits(summary.sites[i].units)}人工・${summary.sites[i].workerCount}人${summary.sites[i].nightUnits > 0 ? '\n昼${formatUnits(summary.sites[i].dayUnits)}人工・夜勤${formatUnits(summary.sites[i].nightUnits)}人工' : ''}',
                   extraLines: [
                     if (summary.sites[i].allowance > 0 ||
+                        summary.sites[i].transport > 0 ||
+                        summary.sites[i].parking > 0 ||
                         summary.sites[i].areaAmount > 0) ...[
                       if (summary.sites[i].wageAmount > 0)
                         '日当　${formatYen(summary.sites[i].wageAmount)}',
                       if (summary.sites[i].allowance > 0)
                         '色付け　${formatYen(summary.sites[i].allowance)}',
+                      if (summary.sites[i].transport > 0)
+                        '交通費　${formatYen(summary.sites[i].transport)}',
+                      if (summary.sites[i].parking > 0)
+                        '駐車場代　${formatYen(summary.sites[i].parking)}',
                       if (summary.sites[i].areaAmount > 0)
                         '平米割り　${formatYen(summary.sites[i].areaAmount)}',
                     ],
@@ -208,6 +215,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
 class _WorkerList extends StatelessWidget {
   const _WorkerList({
     required this.workers,
+    required this.month,
     this.subtotalLabel,
     this.subtotalUnits = 0,
     this.subtotalAmount = 0,
@@ -215,6 +223,7 @@ class _WorkerList extends StatelessWidget {
   });
 
   final List<WorkerTotal> workers;
+  final DateTime month;
   final String? subtotalLabel;
   final double subtotalUnits;
   final int subtotalAmount;
@@ -228,28 +237,60 @@ class _WorkerList extends StatelessWidget {
         children: [
           for (var i = 0; i < workers.length; i++) ...[
             if (i > 0) const Divider(height: 1),
-            _Row(
-              title: workers[i].worker.name,
-              detail: [
-                workers[i].payName,
-                workerDetail(workers[i]),
-                if (workers[i].overtimeHours > 0)
-                  '残業${formatHours(workers[i].overtimeHours)}',
-              ].join('・'),
-              extraLines: [
-                if (workers[i].breakdown.length > 1)
-                  for (final row in workers[i].breakdown)
-                    '${breakdownLabel(row)}　${formatUnits(row.units)}人工',
-                if (workers[i].allowance > 0 || workers[i].areaAmount > 0) ...[
-                  if (workers[i].wageAmount > 0 || workers[i].salary > 0)
-                    '日当　${formatYen(workers[i].wageAmount + workers[i].salary)}',
-                  if (workers[i].allowance > 0)
-                    '色付け　${formatYen(workers[i].allowance)}',
-                  if (workers[i].areaAmount > 0)
-                    '平米割り　${formatYen(workers[i].areaAmount)}',
-                ],
-              ],
-              amount: workers[i].amount,
+            Builder(
+              builder: (buttonContext) {
+                final w = workers[i];
+                return _Row(
+                  title: w.worker.name,
+                  detail: [
+                    w.payName,
+                    workerDetail(w),
+                    if (w.overtimeHours > 0)
+                      '残業${formatHours(w.overtimeHours)}',
+                  ].join('・'),
+                  extraLines: [
+                    if (w.breakdown.length > 1)
+                      for (final row in w.breakdown)
+                        '${breakdownLabel(row)}　${formatUnits(row.units)}人工',
+                    if (w.allowance > 0 ||
+                        w.transport > 0 ||
+                        w.parking > 0 ||
+                        w.areaAmount > 0) ...[
+                      if (w.wageAmount > 0 || w.salary > 0)
+                        '日当　${formatYen(w.wageAmount + w.salary)}',
+                      if (w.allowance > 0)
+                        '色付け　${formatYen(w.allowance)}',
+                      if (w.transport > 0)
+                        '交通費　${formatYen(w.transport)}',
+                      if (w.parking > 0)
+                        '駐車場代　${formatYen(w.parking)}',
+                      if (w.areaAmount > 0)
+                        '平米割り　${formatYen(w.areaAmount)}',
+                    ],
+                  ],
+                  amount: w.amount,
+                  shareKey: Key('share-worker-${w.worker.id}'),
+                  onShare: () => guard(buttonContext, () async {
+                    final controller = AppScope.of(buttonContext);
+                    final origin = shareOriginOf(buttonContext);
+                    final path = await controller.exportWorkerPdf(
+                      month,
+                      w.worker.id,
+                    );
+                    await shareFile(
+                      path: path,
+                      fileName: exportWorkerFileName(
+                        month,
+                        w.worker.name,
+                        'pdf',
+                      ),
+                      mimeType: 'application/pdf',
+                      subject: '${w.worker.name} ${formatMonth(month)}の出面',
+                      origin: origin,
+                    );
+                  }),
+                );
+              },
             ),
           ],
           if (subtotalLabel != null) ...[
@@ -322,6 +363,37 @@ class _TotalCard extends StatelessWidget {
               _Stat(label: '残業', value: formatHours(summary.overtimeHours)),
             ],
           ),
+          if (summary.hasAllowance ||
+              summary.hasTransport ||
+              summary.hasParking ||
+              summary.hasArea) ...[
+            const SizedBox(height: 10),
+            if (summary.wageTotal + summary.salaryTotal > 0)
+              Text(
+                '日当　${formatYen(summary.wageTotal + summary.salaryTotal)}',
+                style: const TextStyle(color: Colors.white70, fontSize: 13),
+              ),
+            if (summary.hasAllowance)
+              Text(
+                '色付け　${formatYen(summary.allowanceTotal)}',
+                style: const TextStyle(color: Colors.white70, fontSize: 13),
+              ),
+            if (summary.hasTransport)
+              Text(
+                '交通費　${formatYen(summary.transportTotal)}',
+                style: const TextStyle(color: Colors.white70, fontSize: 13),
+              ),
+            if (summary.hasParking)
+              Text(
+                '駐車場代　${formatYen(summary.parkingTotal)}',
+                style: const TextStyle(color: Colors.white70, fontSize: 13),
+              ),
+            if (summary.hasArea)
+              Text(
+                '平米割り　${formatYen(summary.areaTotal)}',
+                style: const TextStyle(color: Colors.white70, fontSize: 13),
+              ),
+          ],
         ],
       ),
     );
@@ -381,12 +453,16 @@ class _Row extends StatelessWidget {
     required this.detail,
     required this.amount,
     this.extraLines = const [],
+    this.onShare,
+    this.shareKey,
   });
 
   final String title;
   final String detail;
   final List<String> extraLines;
   final int amount;
+  final VoidCallback? onShare;
+  final Key? shareKey;
 
   @override
   Widget build(BuildContext context) {
@@ -422,13 +498,30 @@ class _Row extends StatelessWidget {
               ],
             ),
           ),
-          Text(
-            formatYen(amount),
-            style: const TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.w800,
-              color: AppColors.navy,
-            ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                formatYen(amount),
+                style: const TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.navy,
+                ),
+              ),
+              if (onShare != null)
+                TextButton(
+                  key: shareKey,
+                  onPressed: onShare,
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    minimumSize: const Size(44, 28),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: const Text('共有'),
+                ),
+            ],
           ),
         ],
       ),

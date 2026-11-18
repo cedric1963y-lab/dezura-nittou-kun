@@ -47,8 +47,12 @@ class _RecordSheetState extends State<_RecordSheet> {
   bool _ready = false;
   bool _existing = false;
   bool _showAllowance = false;
+  bool _showTransport = false;
+  bool _showParking = false;
   final _allowanceYen = TextEditingController();
   final _allowanceMemo = TextEditingController();
+  final _transportYen = TextEditingController();
+  final _parkingYen = TextEditingController();
 
   @override
   void didChangeDependencies() {
@@ -68,6 +72,14 @@ class _RecordSheetState extends State<_RecordSheet> {
         _showAllowance = true;
         _allowanceYen.text = '${record.allowance}';
         _allowanceMemo.text = record.allowanceMemo;
+      }
+      if (record.transport > 0) {
+        _showTransport = true;
+        _transportYen.text = '${record.transport}';
+      }
+      if (record.parking > 0) {
+        _showParking = true;
+        _parkingYen.text = '${record.parking}';
       }
     } else {
       // Another entry on a day that already has one: suggest the other half
@@ -98,12 +110,24 @@ class _RecordSheetState extends State<_RecordSheet> {
   void dispose() {
     _allowanceYen.dispose();
     _allowanceMemo.dispose();
+    _transportYen.dispose();
+    _parkingYen.dispose();
     super.dispose();
   }
 
   int get _allowance {
     if (!_showAllowance) return 0;
     return parseYen(_allowanceYen.text) ?? 0;
+  }
+
+  int get _transport {
+    if (!_showTransport) return 0;
+    return parseYen(_transportYen.text) ?? 0;
+  }
+
+  int get _parking {
+    if (!_showParking) return 0;
+    return parseYen(_parkingYen.text) ?? 0;
   }
 
   @override
@@ -127,7 +151,7 @@ class _RecordSheetState extends State<_RecordSheet> {
         : base
               .copyWith(units: _units, overtimeHours: _overtime, hours: _hours)
               .amount;
-    final amount = wage + _allowance;
+    final amount = wage + _allowance + _transport + _parking;
 
     return SafeArea(
       child: SingleChildScrollView(
@@ -418,6 +442,79 @@ class _RecordSheetState extends State<_RecordSheet> {
                 ),
               ),
             ],
+            const SizedBox(height: 4),
+            if (!_showTransport)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  key: const Key('transport-add'),
+                  onPressed: () => setState(() => _showTransport = true),
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('＋交通費'),
+                ),
+              )
+            else ...[
+              const Text('交通費', style: TextStyle(fontWeight: FontWeight.w800)),
+              const SizedBox(height: 6),
+              TextField(
+                key: const Key('transport-yen'),
+                controller: _transportYen,
+                keyboardType: TextInputType.number,
+                onChanged: (_) => setState(() {}),
+                decoration: const InputDecoration(
+                  labelText: '金額',
+                  hintText: '例: 800',
+                  suffixText: '円',
+                ),
+              ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  key: const Key('transport-clear'),
+                  onPressed: () => setState(() {
+                    _showTransport = false;
+                    _transportYen.clear();
+                  }),
+                  child: const Text('交通費をやめる'),
+                ),
+              ),
+            ],
+            if (!_showParking)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  key: const Key('parking-add'),
+                  onPressed: () => setState(() => _showParking = true),
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('＋駐車場代'),
+                ),
+              )
+            else ...[
+              const Text('駐車場代', style: TextStyle(fontWeight: FontWeight.w800)),
+              const SizedBox(height: 6),
+              TextField(
+                key: const Key('parking-yen'),
+                controller: _parkingYen,
+                keyboardType: TextInputType.number,
+                onChanged: (_) => setState(() {}),
+                decoration: const InputDecoration(
+                  labelText: '金額',
+                  hintText: '例: 1500',
+                  suffixText: '円',
+                ),
+              ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  key: const Key('parking-clear'),
+                  onPressed: () => setState(() {
+                    _showParking = false;
+                    _parkingYen.clear();
+                  }),
+                  child: const Text('駐車場代をやめる'),
+                ),
+              ),
+            ],
             const SizedBox(height: 14),
             FilledButton(
               key: const Key('save-record'),
@@ -439,6 +536,8 @@ class _RecordSheetState extends State<_RecordSheet> {
                           allowanceMemo: _showAllowance
                               ? _allowanceMemo.text
                               : '',
+                          transport: _transport,
+                          parking: _parking,
                         ),
                       );
                       if (ok) {
