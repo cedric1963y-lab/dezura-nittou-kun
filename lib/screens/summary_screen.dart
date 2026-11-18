@@ -5,7 +5,9 @@ import '../errors.dart';
 import '../format.dart';
 import '../models/records.dart';
 import '../logic/summary.dart';
+import '../services/links.dart';
 import '../services/share_service.dart';
+import '../services/toolbox.dart';
 import '../state/app_controller.dart';
 import '../theme.dart';
 import '../widgets/dialogs.dart';
@@ -127,9 +129,22 @@ class _SummaryScreenState extends State<SummaryScreen> {
               for (var i = 0; i < summary.sites.length; i++) ...[
                 if (i > 0) const Divider(height: 1),
                 _Row(
-                  title: summary.sites[i].site.name,
+                  title: summary.sites[i].site.isAreaSite
+                      ? '${summary.sites[i].site.name}（平米）'
+                      : summary.sites[i].site.name,
                   detail:
                       '${formatUnits(summary.sites[i].units)}人工・${summary.sites[i].workerCount}人${summary.sites[i].nightUnits > 0 ? '\n昼${formatUnits(summary.sites[i].dayUnits)}人工・夜勤${formatUnits(summary.sites[i].nightUnits)}人工' : ''}',
+                  extraLines: [
+                    if (summary.sites[i].allowance > 0 ||
+                        summary.sites[i].areaAmount > 0) ...[
+                      if (summary.sites[i].wageAmount > 0)
+                        '日当　${formatYen(summary.sites[i].wageAmount)}',
+                      if (summary.sites[i].allowance > 0)
+                        '色付け　${formatYen(summary.sites[i].allowance)}',
+                      if (summary.sites[i].areaAmount > 0)
+                        '平米割り　${formatYen(summary.sites[i].areaAmount)}',
+                    ],
+                  ],
                   amount: summary.sites[i].amount,
                 ),
               ],
@@ -142,6 +157,15 @@ class _SummaryScreenState extends State<SummaryScreen> {
             child: Text(
               monthlySiteNote,
               key: Key('monthly-site-note'),
+              style: TextStyle(color: AppColors.muted, fontSize: 12),
+            ),
+          ),
+        if (summary.hasArea)
+          const Padding(
+            padding: EdgeInsets.only(top: 6),
+            child: Text(
+              areaSiteNote,
+              key: Key('area-site-note'),
               style: TextStyle(color: AppColors.muted, fontSize: 12),
             ),
           ),
@@ -173,6 +197,10 @@ class _SummaryScreenState extends State<SummaryScreen> {
         icon: const Icon(Icons.picture_as_pdf_outlined),
         label: const Text('出面表PDF・CSV'),
       ),
+      if (!summary.isEmpty) ...[
+        const SizedBox(height: 16),
+        const _MitsumoriPrompt(),
+      ],
     ];
   }
 }
@@ -208,13 +236,19 @@ class _WorkerList extends StatelessWidget {
                 if (workers[i].overtimeHours > 0)
                   '残業${formatHours(workers[i].overtimeHours)}',
               ].join('・'),
-              // Only when split over several 現場 or 昼/夜勤.
-              extraLines: workers[i].breakdown.length > 1
-                  ? [
-                      for (final row in workers[i].breakdown)
-                        '${breakdownLabel(row)}　${formatUnits(row.units)}人工',
-                    ]
-                  : const [],
+              extraLines: [
+                if (workers[i].breakdown.length > 1)
+                  for (final row in workers[i].breakdown)
+                    '${breakdownLabel(row)}　${formatUnits(row.units)}人工',
+                if (workers[i].allowance > 0 || workers[i].areaAmount > 0) ...[
+                  if (workers[i].wageAmount > 0 || workers[i].salary > 0)
+                    '日当　${formatYen(workers[i].wageAmount + workers[i].salary)}',
+                  if (workers[i].allowance > 0)
+                    '色付け　${formatYen(workers[i].allowance)}',
+                  if (workers[i].areaAmount > 0)
+                    '平米割り　${formatYen(workers[i].areaAmount)}',
+                ],
+              ],
               amount: workers[i].amount,
             ),
           ],
@@ -395,6 +429,42 @@ class _Row extends StatelessWidget {
               fontWeight: FontWeight.w800,
               color: AppColors.navy,
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MitsumoriPrompt extends StatelessWidget {
+  const _MitsumoriPrompt();
+
+  @override
+  Widget build(BuildContext context) {
+    final app = ConstructionApps.mitsumori;
+    return Panel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            '月末の集計を、見積に使う',
+            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '${app.name}で、この月の人工費を見積の一行にできます。',
+            style: const TextStyle(height: 1.45, color: AppColors.muted),
+          ),
+          const SizedBox(height: 10),
+          OutlinedButton(
+            key: const Key('mitsumori-prompt'),
+            onPressed: () async {
+              final ok = await openExternal(app.storeUrl);
+              if (!ok && context.mounted) {
+                showSnack(context, 'ページを開けませんでした。');
+              }
+            },
+            child: const Text('見積・請求くんを見る'),
           ),
         ],
       ),

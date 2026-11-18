@@ -314,10 +314,25 @@ class _WorkerDialogState extends State<_WorkerDialog> {
 }
 
 class SiteDraft {
-  const SiteDraft({required this.name, required this.note});
+  const SiteDraft({
+    required this.name,
+    required this.note,
+    this.isAreaSite = false,
+    this.areaAmountMode = AreaAmountMode.areaTimesRate,
+    this.areaSqm = 0,
+    this.areaUnitPrice = 0,
+    this.contractAmount = 0,
+    this.settlementMonth = '',
+  });
 
   final String name;
   final String note;
+  final bool isAreaSite;
+  final AreaAmountMode areaAmountMode;
+  final double areaSqm;
+  final int areaUnitPrice;
+  final int contractAmount;
+  final String settlementMonth;
 }
 
 Future<SiteDraft?> showSiteDialog(
@@ -326,6 +341,13 @@ Future<SiteDraft?> showSiteDialog(
   String saveLabel = '追加',
   String initialName = '',
   String initialNote = '',
+  bool initialIsAreaSite = false,
+  AreaAmountMode initialAreaAmountMode = AreaAmountMode.areaTimesRate,
+  double initialAreaSqm = 0,
+  int initialAreaUnitPrice = 0,
+  int initialContractAmount = 0,
+  String initialSettlementMonth = '',
+  DateTime? now,
 }) {
   return showDialog<SiteDraft>(
     context: context,
@@ -334,6 +356,13 @@ Future<SiteDraft?> showSiteDialog(
       saveLabel: saveLabel,
       initialName: initialName,
       initialNote: initialNote,
+      initialIsAreaSite: initialIsAreaSite,
+      initialAreaAmountMode: initialAreaAmountMode,
+      initialAreaSqm: initialAreaSqm,
+      initialAreaUnitPrice: initialAreaUnitPrice,
+      initialContractAmount: initialContractAmount,
+      initialSettlementMonth: initialSettlementMonth,
+      now: now ?? DateTime.now(),
     ),
   );
 }
@@ -344,12 +373,26 @@ class _SiteDialog extends StatefulWidget {
     required this.saveLabel,
     required this.initialName,
     required this.initialNote,
+    required this.initialIsAreaSite,
+    required this.initialAreaAmountMode,
+    required this.initialAreaSqm,
+    required this.initialAreaUnitPrice,
+    required this.initialContractAmount,
+    required this.initialSettlementMonth,
+    required this.now,
   });
 
   final String title;
   final String saveLabel;
   final String initialName;
   final String initialNote;
+  final bool initialIsAreaSite;
+  final AreaAmountMode initialAreaAmountMode;
+  final double initialAreaSqm;
+  final int initialAreaUnitPrice;
+  final int initialContractAmount;
+  final String initialSettlementMonth;
+  final DateTime now;
 
   @override
   State<_SiteDialog> createState() => _SiteDialogState();
@@ -358,13 +401,57 @@ class _SiteDialog extends StatefulWidget {
 class _SiteDialogState extends State<_SiteDialog> {
   late final _name = TextEditingController(text: widget.initialName);
   late final _note = TextEditingController(text: widget.initialNote);
+  late final _sqm = TextEditingController(
+    text: widget.initialAreaSqm > 0 ? formatUnits(widget.initialAreaSqm) : '',
+  );
+  late final _unitPrice = TextEditingController(
+    text: widget.initialAreaUnitPrice > 0
+        ? '${widget.initialAreaUnitPrice}'
+        : '',
+  );
+  late final _contract = TextEditingController(
+    text: widget.initialContractAmount > 0
+        ? '${widget.initialContractAmount}'
+        : '',
+  );
+  late bool _isArea = widget.initialIsAreaSite;
+  late AreaAmountMode _mode = widget.initialAreaAmountMode;
+  late String _settlement = widget.initialSettlementMonth.isEmpty
+      ? monthKey(widget.now)
+      : widget.initialSettlementMonth;
   String? _error;
+
+  List<String> get _months {
+    final first = DateTime(widget.now.year, widget.now.month - 24);
+    return [
+      for (var i = 0; i < 37; i++) monthKey(DateTime(first.year, first.month + i)),
+    ];
+  }
 
   @override
   void dispose() {
     _name.dispose();
     _note.dispose();
+    _sqm.dispose();
+    _unitPrice.dispose();
+    _contract.dispose();
     super.dispose();
+  }
+
+  int _parseYen(String raw, String label) {
+    final text = raw.replaceAll(',', '').replaceAll('¥', '').trim();
+    if (text.isEmpty) throw InvalidInput('$labelを入力してください。');
+    final value = int.tryParse(text);
+    if (value == null) throw InvalidInput('$labelは数字で入力してください。');
+    return value;
+  }
+
+  double _parseSqm(String raw) {
+    final text = raw.replaceAll(',', '').trim();
+    if (text.isEmpty) throw const InvalidInput('平米数を入力してください。');
+    final value = double.tryParse(text);
+    if (value == null) throw const InvalidInput('平米数は数字で入力してください。');
+    return value;
   }
 
   void _save() {
@@ -372,11 +459,51 @@ class _SiteDialogState extends State<_SiteDialog> {
       setState(() => _error = '現場名を入力してください。');
       return;
     }
-    Navigator.pop(context, SiteDraft(name: _name.text, note: _note.text));
+    var sqm = 0.0;
+    var unit = 0;
+    var contract = 0;
+    if (_isArea) {
+      try {
+        if (_mode == AreaAmountMode.contract) {
+          contract = _parseYen(_contract.text, '請負額');
+        } else {
+          sqm = _parseSqm(_sqm.text);
+          unit = _parseYen(_unitPrice.text, '平米単価');
+        }
+      } on InvalidInput catch (e) {
+        setState(() => _error = e.message);
+        return;
+      }
+    } else {
+      // Keep typed values so turning the switch back on is not a redo.
+      sqm = double.tryParse(_sqm.text.replaceAll(',', '').trim()) ?? 0;
+      unit = int.tryParse(_unitPrice.text.replaceAll(RegExp(r'[^\d]'), '')) ?? 0;
+      contract =
+          int.tryParse(_contract.text.replaceAll(RegExp(r'[^\d]'), '')) ?? 0;
+    }
+    Navigator.pop(
+      context,
+      SiteDraft(
+        name: _name.text,
+        note: _note.text,
+        isAreaSite: _isArea,
+        areaAmountMode: _mode,
+        areaSqm: sqm,
+        areaUnitPrice: unit,
+        contractAmount: contract,
+        settlementMonth: _settlement,
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final months = _months;
+    final settlement = months.contains(_settlement)
+        ? _settlement
+        : months.contains(monthKey(widget.now))
+        ? monthKey(widget.now)
+        : months.last;
     return _FormDialog(
       title: widget.title,
       saveLabel: widget.saveLabel,
@@ -401,15 +528,106 @@ class _SiteDialogState extends State<_SiteDialog> {
           key: const Key('site-note'),
           controller: _note,
           maxLength: 40,
-          onSubmitted: (_) => _save(),
           decoration: const InputDecoration(
             labelText: '元請・メモ（任意）',
             hintText: '例: 〇〇建設',
             counterText: '',
           ),
         ),
+        const SizedBox(height: 8),
+        SwitchListTile.adaptive(
+          key: const Key('area-site-toggle'),
+          contentPadding: EdgeInsets.zero,
+          title: const Text(
+            '平米の現場',
+            style: TextStyle(fontWeight: FontWeight.w800),
+          ),
+          subtitle: const Text('現場の金額を人工の割合で分ける。日当は付きません。'),
+          value: _isArea,
+          onChanged: (value) => setState(() => _isArea = value),
+        ),
+        if (_isArea) ...[
+          const SizedBox(height: 4),
+          SegmentedButton<AreaAmountMode>(
+            key: const Key('area-amount-mode'),
+            segments: const [
+              ButtonSegment(
+                value: AreaAmountMode.areaTimesRate,
+                label: Text('平米数×単価'),
+              ),
+              ButtonSegment(
+                value: AreaAmountMode.contract,
+                label: Text('請負額'),
+              ),
+            ],
+            selected: {_mode},
+            showSelectedIcon: false,
+            onSelectionChanged: (value) => setState(() => _mode = value.first),
+          ),
+          const SizedBox(height: 12),
+          if (_mode == AreaAmountMode.areaTimesRate) ...[
+            TextField(
+              key: const Key('area-sqm'),
+              controller: _sqm,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(
+                labelText: '平米数',
+                hintText: '例: 120',
+                suffixText: '㎡',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              key: const Key('area-unit-price'),
+              controller: _unitPrice,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: '平米単価',
+                hintText: '例: 3000',
+                suffixText: '円',
+              ),
+            ),
+          ] else
+            TextField(
+              key: const Key('area-contract'),
+              controller: _contract,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: '請負額',
+                hintText: '例: 360000',
+                suffixText: '円',
+              ),
+            ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            key: const Key('area-settlement-month'),
+            // ignore: deprecated_member_use
+            value: settlement,
+            decoration: const InputDecoration(
+              labelText: '集計月',
+              helperText: '月をまたぐ現場は、この月にまとめて分けます。仕事が終わった月にしてください。',
+              helperMaxLines: 3,
+            ),
+            items: [
+              for (final key in months)
+                DropdownMenuItem(value: key, child: Text(_labelMonth(key))),
+            ],
+            onChanged: (value) {
+              if (value != null) setState(() => _settlement = value);
+            },
+          ),
+        ],
       ],
     );
+  }
+
+  String _labelMonth(String key) {
+    final parts = key.split('-');
+    if (parts.length != 2) return key;
+    final year = int.tryParse(parts[0]);
+    final month = int.tryParse(parts[1]);
+    if (year == null || month == null) return key;
+    return formatMonth(DateTime(year, month));
   }
 }
 

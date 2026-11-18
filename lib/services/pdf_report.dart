@@ -57,6 +57,10 @@ Future<Uint8List> buildMonthlyPdf({
             pw.Expanded(flex: 4, child: _siteTable(summary)),
           ],
         ),
+        if (summary.hasAllowance || summary.hasArea) ...[
+          pw.SizedBox(height: 14),
+          _payBreakdownTable(summary),
+        ],
         if (_needsBreakdown(summary)) ...[
           // Own page, so the title never sits alone at the bottom of one.
           pw.NewPage(),
@@ -338,6 +342,38 @@ pw.Widget _workerTable(MonthSummary summary) {
   );
 }
 
+pw.Widget _payBreakdownTable(MonthSummary summary) {
+  final wageLabel = summary.hasMonthly ? '日当・給与' : '日当';
+  List<String> row(WorkerTotal w) => [
+    w.kind == WorkerKind.contractor
+        ? '${_clip(w.worker.name, 7)}（外注）'
+        : _clip(w.worker.name, 10),
+    formatYen(w.wageAmount + w.salary),
+    if (summary.hasAllowance) w.allowance > 0 ? formatYen(w.allowance) : '-',
+    if (summary.hasArea) w.areaAmount > 0 ? formatYen(w.areaAmount) : '-',
+    formatYen(w.amount),
+  ];
+  return _table(
+    title: '金額の内訳',
+    headers: [
+      '職人',
+      wageLabel,
+      if (summary.hasAllowance) '色付け',
+      if (summary.hasArea) '平米割り',
+      '合計',
+    ],
+    rows: [for (final w in summary.workers) row(w)],
+    total: [
+      '合計',
+      formatYen(summary.wageTotal + summary.salaryTotal),
+      if (summary.hasAllowance) formatYen(summary.allowanceTotal),
+      if (summary.hasArea) formatYen(summary.areaTotal),
+      formatYen(summary.amount),
+    ],
+    note: summary.hasArea ? areaSiteNote : null,
+  );
+}
+
 String _otOf(List<WorkerTotal> list) {
   final ot = list.fold(0.0, (sum, w) => sum + w.overtimeHours);
   return ot > 0 ? formatHours(ot) : '-';
@@ -380,7 +416,7 @@ pw.Widget _siteTable(MonthSummary summary) {
     rows: [
       for (final s in summary.sites)
         [
-          _clip(s.site.name, 14),
+          _clip(s.site.isAreaSite ? '${s.site.name}（平米）' : s.site.name, 16),
           '${s.workerCount}人',
           formatUnits(s.units),
           formatYen(s.amount),
@@ -388,14 +424,18 @@ pw.Widget _siteTable(MonthSummary summary) {
     ],
     total: null,
   );
-  if (!summary.hasMonthly) return table;
+  final notes = [
+    if (summary.hasMonthly) monthlySiteNote,
+    if (summary.hasArea) areaSiteNote,
+  ];
+  if (notes.isEmpty) return table;
   return pw.Column(
     crossAxisAlignment: pw.CrossAxisAlignment.start,
     children: [
       table,
       pw.SizedBox(height: 4),
       pw.Text(
-        monthlySiteNote,
+        notes.join('\n'),
         style: const pw.TextStyle(color: _muted, fontSize: 7),
       ),
     ],

@@ -174,12 +174,35 @@ class Worker {
   }
 }
 
+/// How a 平米 site's lump sum is entered. Files before 1.0.7 are not
+/// 平米 sites.
+enum AreaAmountMode {
+  areaTimesRate('areaTimesRate'),
+  contract('contract');
+
+  const AreaAmountMode(this.key);
+  final String key;
+
+  static AreaAmountMode fromKey(Object? raw) {
+    for (final mode in values) {
+      if (mode.key == raw) return mode;
+    }
+    return areaTimesRate;
+  }
+}
+
 class Site {
   const Site({
     required this.id,
     required this.name,
     required this.note,
     required this.createdAt,
+    this.isAreaSite = false,
+    this.areaAmountMode = AreaAmountMode.areaTimesRate,
+    this.areaSqm = 0,
+    this.areaUnitPrice = 0,
+    this.contractAmount = 0,
+    this.settlementMonth = '',
   });
 
   final String id;
@@ -189,12 +212,53 @@ class Site {
   final String note;
   final DateTime createdAt;
 
-  Site copyWith({String? name, String? note}) {
+  /// When true, this site pays a lump 平米/請負 amount and no 日当.
+  final bool isAreaSite;
+
+  /// 平米数×単価, or a single 請負額.
+  final AreaAmountMode areaAmountMode;
+
+  /// 平米数. Used when [areaAmountMode] is [AreaAmountMode.areaTimesRate].
+  final double areaSqm;
+
+  /// 平米単価 in yen. Used with [areaSqm].
+  final int areaUnitPrice;
+
+  /// 請負額 in yen. Used when [areaAmountMode] is [AreaAmountMode.contract].
+  final int contractAmount;
+
+  /// `YYYY-MM`. The lump amount is counted only in this month, split by
+  /// 人工 across every month of the job. Empty means not yet settled.
+  final String settlementMonth;
+
+  /// Lump sum to split, or 0 when this is not a 平米 site.
+  int get areaTotal {
+    if (!isAreaSite) return 0;
+    if (areaAmountMode == AreaAmountMode.contract) return contractAmount;
+    return (areaSqm * areaUnitPrice).round();
+  }
+
+  Site copyWith({
+    String? name,
+    String? note,
+    bool? isAreaSite,
+    AreaAmountMode? areaAmountMode,
+    double? areaSqm,
+    int? areaUnitPrice,
+    int? contractAmount,
+    String? settlementMonth,
+  }) {
     return Site(
       id: id,
       name: name ?? this.name,
       note: note ?? this.note,
       createdAt: createdAt,
+      isAreaSite: isAreaSite ?? this.isAreaSite,
+      areaAmountMode: areaAmountMode ?? this.areaAmountMode,
+      areaSqm: areaSqm ?? this.areaSqm,
+      areaUnitPrice: areaUnitPrice ?? this.areaUnitPrice,
+      contractAmount: contractAmount ?? this.contractAmount,
+      settlementMonth: settlementMonth ?? this.settlementMonth,
     );
   }
 
@@ -203,6 +267,12 @@ class Site {
     'name': name,
     'note': note,
     'createdAt': createdAt.millisecondsSinceEpoch,
+    'isAreaSite': isAreaSite,
+    'areaAmountMode': areaAmountMode.key,
+    'areaSqm': areaSqm,
+    'areaUnitPrice': areaUnitPrice,
+    'contractAmount': contractAmount,
+    'settlementMonth': settlementMonth,
   };
 
   static Site fromJson(Map<String, dynamic> json) {
@@ -211,6 +281,12 @@ class Site {
       name: (json['name'] as String?) ?? '',
       note: (json['note'] as String?) ?? '',
       createdAt: DateTime.fromMillisecondsSinceEpoch(_int(json['createdAt'])),
+      isAreaSite: json['isAreaSite'] == true,
+      areaAmountMode: AreaAmountMode.fromKey(json['areaAmountMode']),
+      areaSqm: _double(json['areaSqm']),
+      areaUnitPrice: _int(json['areaUnitPrice']),
+      contractAmount: _int(json['contractAmount']),
+      settlementMonth: (json['settlementMonth'] as String?) ?? '',
     );
   }
 }
@@ -236,6 +312,8 @@ class DayRecord {
     this.hours = 0,
     this.hourlyRate = 0,
     this.monthlySalary = 0,
+    this.allowance = 0,
+    this.allowanceMemo = '',
   }) : id = id ?? createId();
 
   /// Unique per entry. Files before 1.0.6 get `workerId@day`.
@@ -267,6 +345,13 @@ class DayRecord {
   final int dayRate;
   final int overtimeRate;
 
+  /// 色付け: an optional extra yen for a tough day. Not part of 日当.
+  /// Files before 1.0.7 have none.
+  final int allowance;
+
+  /// Optional memo for [allowance].
+  final String allowanceMemo;
+
   int get overtimeAmount => (overtimeRate * overtimeHours).round();
 
   /// Pay for this day. 日当: 人工 x 日当. 時給: hours x 時給. 月給: none here
@@ -295,6 +380,8 @@ class DayRecord {
     hours: hours,
     hourlyRate: hourlyRate,
     monthlySalary: monthlySalary,
+    allowance: allowance,
+    allowanceMemo: allowanceMemo,
   );
 
   DayRecord copyWith({
@@ -308,6 +395,8 @@ class DayRecord {
     int? hourlyRate,
     int? monthlySalary,
     Shift? shift,
+    int? allowance,
+    String? allowanceMemo,
   }) {
     return DayRecord(
       id: id,
@@ -323,6 +412,8 @@ class DayRecord {
       hours: hours ?? this.hours,
       hourlyRate: hourlyRate ?? this.hourlyRate,
       monthlySalary: monthlySalary ?? this.monthlySalary,
+      allowance: allowance ?? this.allowance,
+      allowanceMemo: allowanceMemo ?? this.allowanceMemo,
     );
   }
 
@@ -340,6 +431,8 @@ class DayRecord {
     'hourlyRate': hourlyRate,
     'monthlySalary': monthlySalary,
     'overtimeRate': overtimeRate,
+    'allowance': allowance,
+    'allowanceMemo': allowanceMemo,
   };
 
   static DayRecord fromJson(Map<String, dynamic> json) {
@@ -360,6 +453,8 @@ class DayRecord {
       hourlyRate: _int(json['hourlyRate']),
       monthlySalary: _int(json['monthlySalary']),
       overtimeRate: _int(json['overtimeRate']),
+      allowance: _int(json['allowance']),
+      allowanceMemo: (json['allowanceMemo'] as String?) ?? '',
     );
   }
 }

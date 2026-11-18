@@ -306,13 +306,36 @@ class AppController extends ChangeNotifier {
 
   // ------------------------------------------------------------------ sites
 
-  Future<Site> addSite({required String name, String note = ''}) async {
+  Future<Site> addSite({
+    required String name,
+    String note = '',
+    bool isAreaSite = false,
+    AreaAmountMode areaAmountMode = AreaAmountMode.areaTimesRate,
+    double areaSqm = 0,
+    int areaUnitPrice = 0,
+    int contractAmount = 0,
+    String settlementMonth = '',
+  }) async {
     if (!canAddSite) throw const LimitReached(LimitKind.sites);
+    final area = _areaFields(
+      isAreaSite: isAreaSite,
+      areaAmountMode: areaAmountMode,
+      areaSqm: areaSqm,
+      areaUnitPrice: areaUnitPrice,
+      contractAmount: contractAmount,
+      settlementMonth: settlementMonth,
+    );
     final site = Site(
       id: createId(),
       name: _requiredLine(name, '現場名', 30),
       note: _optionalLine(note, 40),
       createdAt: _now(),
+      isAreaSite: area.isAreaSite,
+      areaAmountMode: area.areaAmountMode,
+      areaSqm: area.areaSqm,
+      areaUnitPrice: area.areaUnitPrice,
+      contractAmount: area.contractAmount,
+      settlementMonth: area.settlementMonth,
     );
     final next = [...sites, site];
     await repository.saveSites(next);
@@ -327,13 +350,33 @@ class AppController extends ChangeNotifier {
     required String id,
     required String name,
     String note = '',
+    bool isAreaSite = false,
+    AreaAmountMode areaAmountMode = AreaAmountMode.areaTimesRate,
+    double areaSqm = 0,
+    int areaUnitPrice = 0,
+    int contractAmount = 0,
+    String settlementMonth = '',
   }) async {
     final index = sites.indexWhere((s) => s.id == id);
     if (index < 0) throw const InvalidInput('現場が見つかりません。');
+    final area = _areaFields(
+      isAreaSite: isAreaSite,
+      areaAmountMode: areaAmountMode,
+      areaSqm: areaSqm,
+      areaUnitPrice: areaUnitPrice,
+      contractAmount: contractAmount,
+      settlementMonth: settlementMonth,
+    );
     sites = [...sites]
       ..[index] = sites[index].copyWith(
         name: _requiredLine(name, '現場名', 30),
         note: _optionalLine(note, 40),
+        isAreaSite: area.isAreaSite,
+        areaAmountMode: area.areaAmountMode,
+        areaSqm: area.areaSqm,
+        areaUnitPrice: area.areaUnitPrice,
+        contractAmount: area.contractAmount,
+        settlementMonth: area.settlementMonth,
       );
     await repository.saveSites(sites);
     notifyListeners();
@@ -435,6 +478,8 @@ class AppController extends ChangeNotifier {
     double? hours,
     String? recordId,
     Shift shift = Shift.day,
+    int? allowance,
+    String? allowanceMemo,
   }) async {
     final worker = workerById(workerId);
     if (worker == null) throw const InvalidInput('職人が見つかりません。');
@@ -468,6 +513,10 @@ class AppController extends ChangeNotifier {
         throw const InvalidInput('勤務時間は0.5〜24時間で入力してください。');
       }
     }
+    final yen = allowance ?? base.allowance;
+    if (yen < 0 || yen > 1000000) {
+      throw const InvalidInput('色付けは0〜1,000,000円で入力してください。');
+    }
     await _replace(
       existing?.id,
       base.copyWith(
@@ -476,6 +525,8 @@ class AppController extends ChangeNotifier {
         overtimeHours: overtimeHours,
         hours: workHours,
         shift: shift,
+        allowance: yen,
+        allowanceMemo: _optionalLine(allowanceMemo ?? base.allowanceMemo, 40),
       ),
     );
   }
@@ -725,6 +776,63 @@ class AppController extends ChangeNotifier {
       throw InvalidInput('$labelは0〜1,000,000円で入力してください。');
     }
     return value;
+  }
+
+  static final _monthKeyPattern = RegExp(r'^\d{4}-\d{2}$');
+
+  /// Validates 平米の現場 fields. When the switch is off, values are kept
+  /// so the user can turn it back on without typing them again, but they
+  /// have no effect on pay.
+  ({
+    bool isAreaSite,
+    AreaAmountMode areaAmountMode,
+    double areaSqm,
+    int areaUnitPrice,
+    int contractAmount,
+    String settlementMonth,
+  })
+  _areaFields({
+    required bool isAreaSite,
+    required AreaAmountMode areaAmountMode,
+    required double areaSqm,
+    required int areaUnitPrice,
+    required int contractAmount,
+    required String settlementMonth,
+  }) {
+    final month = settlementMonth.trim();
+    if (!isAreaSite) {
+      return (
+        isAreaSite: false,
+        areaAmountMode: areaAmountMode,
+        areaSqm: areaSqm,
+        areaUnitPrice: areaUnitPrice,
+        contractAmount: contractAmount,
+        settlementMonth: month,
+      );
+    }
+    if (!_monthKeyPattern.hasMatch(month)) {
+      throw const InvalidInput('集計月を選んでください。');
+    }
+    if (areaAmountMode == AreaAmountMode.contract) {
+      if (contractAmount <= 0 || contractAmount > 100000000) {
+        throw const InvalidInput('請負額は1〜100,000,000円で入力してください。');
+      }
+    } else {
+      if (areaSqm <= 0 || areaSqm > 100000) {
+        throw const InvalidInput('平米数を入力してください。');
+      }
+      if (areaUnitPrice <= 0 || areaUnitPrice > 10000000) {
+        throw const InvalidInput('平米単価は1〜10,000,000円で入力してください。');
+      }
+    }
+    return (
+      isAreaSite: true,
+      areaAmountMode: areaAmountMode,
+      areaSqm: areaSqm,
+      areaUnitPrice: areaUnitPrice,
+      contractAmount: contractAmount,
+      settlementMonth: month,
+    );
   }
 
   @override

@@ -13,14 +13,35 @@ enum _RosterTab { workers, sites }
 
 /// 名簿: workers with their day rates, and sites.
 class RosterScreen extends StatefulWidget {
-  const RosterScreen({super.key});
+  const RosterScreen({
+    this.startOnSites = false,
+    this.autoEditSiteId,
+    super.key,
+  });
+
+  /// Debug screenshot hook. Production always uses the defaults.
+  final bool startOnSites;
+  final String? autoEditSiteId;
 
   @override
   State<RosterScreen> createState() => _RosterScreenState();
 }
 
 class _RosterScreenState extends State<RosterScreen> {
-  var _tab = _RosterTab.workers;
+  late var _tab = widget.startOnSites ? _RosterTab.sites : _RosterTab.workers;
+  var _opened = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final id = widget.autoEditSiteId;
+    if (_opened || id == null) return;
+    _opened = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _editSite(AppScope.of(context), id);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -133,6 +154,7 @@ class _RosterScreenState extends State<RosterScreen> {
               ),
               subtitle: Text(
                 [
+                  if (s.isAreaSite) '平米の現場',
                   if (s.note.isNotEmpty) s.note,
                   '出面 ${controller.recordCountForSite(s.id)}件',
                 ].join('・'),
@@ -229,7 +251,16 @@ class _RosterScreenState extends State<RosterScreen> {
     if (draft == null || !mounted) return;
     await guard(
       context,
-      () => controller.addSite(name: draft.name, note: draft.note),
+      () => controller.addSite(
+        name: draft.name,
+        note: draft.note,
+        isAreaSite: draft.isAreaSite,
+        areaAmountMode: draft.areaAmountMode,
+        areaSqm: draft.areaSqm,
+        areaUnitPrice: draft.areaUnitPrice,
+        contractAmount: draft.contractAmount,
+        settlementMonth: draft.settlementMonth,
+      ),
     );
   }
 
@@ -242,11 +273,28 @@ class _RosterScreenState extends State<RosterScreen> {
       saveLabel: '保存',
       initialName: s.name,
       initialNote: s.note,
+      initialIsAreaSite: s.isAreaSite,
+      initialAreaAmountMode: s.areaAmountMode,
+      initialAreaSqm: s.areaSqm,
+      initialAreaUnitPrice: s.areaUnitPrice,
+      initialContractAmount: s.contractAmount,
+      initialSettlementMonth: s.settlementMonth,
+      now: controller.now,
     );
     if (draft == null || !mounted) return;
     await guard(
       context,
-      () => controller.updateSite(id: id, name: draft.name, note: draft.note),
+      () => controller.updateSite(
+        id: id,
+        name: draft.name,
+        note: draft.note,
+        isAreaSite: draft.isAreaSite,
+        areaAmountMode: draft.areaAmountMode,
+        areaSqm: draft.areaSqm,
+        areaUnitPrice: draft.areaUnitPrice,
+        contractAmount: draft.contractAmount,
+        settlementMonth: draft.settlementMonth,
+      ),
     );
   }
 
