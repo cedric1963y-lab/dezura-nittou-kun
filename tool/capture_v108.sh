@@ -22,9 +22,10 @@ build_for() {
 
 shot() {
   local name=$1 tab=$2
+  local wait=${3:-10}
   build_for "$tab"
   xcrun simctl launch "$DEV" $BUNDLE >/dev/null
-  sleep 10
+  sleep "$wait"
   xcrun simctl io "$DEV" screenshot "$OUT/$name.png"
   sips -g pixelWidth -g pixelHeight "$OUT/$name.png" | tail -2
 }
@@ -33,4 +34,6 @@ shot 01-site-address-dialog 17
 shot 02-units-chips 18
 shot 03-summary-address 19
 shot 04-worker-pdf-address 20
+shot 05-plan-edit 21
+shot 06-plan-image 22 14
 echo "saved to $OUT"

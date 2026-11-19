@@ -11,6 +11,7 @@ import 'premium_screen.dart';
 import 'roster_screen.dart';
 import 'settings_screen.dart';
 import 'summary_screen.dart';
+import 'plan_screen.dart';
 import 'worker_pdf_screen.dart';
 
 /// Bottom tabs: 出面 / 集計 / 名簿 / 設定.
@@ -20,7 +21,8 @@ class HomeShell extends StatefulWidget {
   /// 0-3 picks a tab. Debug screenshot runs also use 10 (集計 then 出力),
   /// 11 (プレミアム), 12 (平米の現場の編集), 13 (職人の道具箱), 14 (色付け),
   /// 15 (交通費・駐車場代), 16 (個人明細PDF), 17 (現場の住所編集),
-  /// 18 (人工のチップ), 19 (住所つき集計), 20 (住所つき個人明細PDF).
+  /// 18 (人工のチップ), 19 (住所つき集計), 20 (住所つき個人明細PDF),
+  /// 21 (明日の予定), 22 (予定の画像).
   final int startTab;
 
   @override
@@ -37,6 +39,8 @@ class _HomeShellState extends State<HomeShell> {
     18 => 0,
     19 => 1,
     20 => 1,
+    21 => 0,
+    22 => 0,
     _ => widget.startTab.clamp(0, 3),
   };
 
@@ -107,6 +111,17 @@ class _HomeShellState extends State<HomeShell> {
               ),
             );
           }
+          return;
+        }
+        if (widget.startTab == 21 || widget.startTab == 22) {
+          final c = AppScope.of(context);
+          final day = tomorrowOf(c.now);
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) =>
+                  PlanScreen(initialDay: day, openImage: widget.startTab == 22),
+            ),
+          );
         }
       });
     }

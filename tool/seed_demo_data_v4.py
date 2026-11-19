@@ -112,4 +112,14 @@ write("sites.json", {"version": 5, "sites": [
 write("records.json", {"version": 5, "records": records})
 write("settings.json", {"version": 1, "selectedSiteId": "s-area", "businessName": "山田工業"})
 write("entitlement.json", {"version": 1})
+tomorrow = today + dt.timedelta(days=1)
+write("plans.json", {"version": 1, "plans": [
+    {
+        "day": tomorrow.isoformat(),
+        "sites": [
+            {"siteId": "s-area", "workerIds": ["w1", "w3"], "note": "集合8時"},
+            {"siteId": "s1", "workerIds": ["w2"], "note": ""},
+        ],
+    }
+]})
 print(f"wrote {len(records)} records to {root}")

@@ -8,7 +8,9 @@ import '../errors.dart';
 import '../format.dart';
 import '../ids.dart';
 import '../logic/summary.dart';
+import '../models/plans.dart';
 import '../models/records.dart';
+import '../services/plan_image.dart';
 import '../plan/entitlement.dart';
 import '../plan/limits.dart';
 import '../services/pdf_report.dart';
@@ -37,6 +39,7 @@ class AppController extends ChangeNotifier {
   List<Worker> workers = [];
   List<Site> sites = [];
   List<DayRecord> records = [];
+  List<DayPlan> plans = [];
   Entitlement entitlement = const Entitlement();
   PurchasePhase purchasePhase = PurchasePhase.idle;
   String? purchaseError;
@@ -85,6 +88,7 @@ class AppController extends ChangeNotifier {
     workers = await repository.loadWorkers();
     sites = await repository.loadSites();
     records = await repository.loadRecords();
+    plans = await repository.loadPlans();
     entitlement = await repository.loadEntitlement();
     final settings = await repository.loadSettings();
     final selected = settings['selectedSiteId'];
@@ -289,8 +293,10 @@ class AppController extends ChangeNotifier {
   Future<void> deleteWorker(String id) async {
     workers = workers.where((w) => w.id != id).toList();
     records = records.where((r) => r.workerId != id).toList();
+    plans = _plansWithout(workerId: id);
     await repository.saveWorkers(workers);
     await repository.saveRecords(records);
+    await repository.savePlans(plans);
     notifyListeners();
   }
 
@@ -389,9 +395,11 @@ class AppController extends ChangeNotifier {
   Future<void> deleteSite(String id) async {
     sites = sites.where((s) => s.id != id).toList();
     records = records.where((r) => r.siteId != id).toList();
+    plans = _plansWithout(siteId: id);
     if (_selectedSiteId == id) _selectedSiteId = null;
     await repository.saveSites(sites);
     await repository.saveRecords(records);
+    await repository.savePlans(plans);
     await _saveSettings();
     notifyListeners();
   }
@@ -628,6 +636,195 @@ class AppController extends ChangeNotifier {
 
   void _ensureMonthOpen(DateTime day) {
     if (!canOpenMonth(day)) throw const LimitReached(LimitKind.history);
+  }
+
+  // ---------------------------------------------------------------- plans
+
+  DayPlan planFor(DateTime day) {
+    final key = dayKey(day);
+    for (final plan in plans) {
+      if (plan.day == key) return plan;
+    }
+    return DayPlan(day: key);
+  }
+
+  /// Inserts or replaces the plan for [plan.day], drops empty site rows,
+  /// and forgets plans outside the retention window.
+  Future<void> savePlan(DayPlan plan) async {
+    if (tryParseDayKey(plan.day) == null) {
+      throw const InvalidInput('日付の形式が不正です。');
+    }
+    final cleaned = DayPlan(
+      day: plan.day,
+      sites: [
+        for (final s in plan.sites)
+          if (s.siteId.isNotEmpty && siteById(s.siteId) != null)
+            SitePlan(
+              siteId: s.siteId,
+              workerIds: [
+                for (final id in s.workerIds)
+                  if (workerById(id) != null) id,
+              ],
+              note: _optionalLine(s.note, maxPlanNoteLength),
+            ),
+      ],
+    );
+    final next = [
+      for (final p in plans)
+        if (p.day != cleaned.day) p,
+      if (!cleaned.isEmpty) cleaned,
+    ];
+    plans = _prunePlans(next);
+    notifyListeners();
+    await repository.savePlans(plans);
+  }
+
+  Future<void> clearPlan(DateTime day) async {
+    final key = dayKey(day);
+    plans = [
+      for (final p in plans)
+        if (p.day != key) p,
+    ];
+    await repository.savePlans(plans);
+    notifyListeners();
+  }
+
+  /// Assigns [workerId] to [siteId] on [day], or removes them if they
+  /// were already there. A worker is only on one site per day.
+  Future<void> togglePlanWorker({
+    required DateTime day,
+    required String siteId,
+    required String workerId,
+  }) async {
+    if (siteById(siteId) == null) {
+      throw const InvalidInput('現場が見つかりません。');
+    }
+    if (workerById(workerId) == null) {
+      throw const InvalidInput('職人が見つかりません。');
+    }
+    final current = planFor(day);
+    final already = current.site(siteId).workerIds.contains(workerId);
+    final sites = <SitePlan>[
+      for (final s in current.sites)
+        if (s.siteId != siteId)
+          s.copyWith(
+            workerIds: [
+              for (final id in s.workerIds)
+                if (id != workerId) id,
+            ],
+          ),
+    ];
+    final mine = current.site(siteId);
+    final workers = [
+      for (final id in mine.workerIds)
+        if (id != workerId) id,
+      if (!already) workerId,
+    ];
+    sites.add(mine.copyWith(workerIds: workers));
+    await savePlan(current.copyWith(sites: sites));
+  }
+
+  Future<void> setPlanNote({
+    required DateTime day,
+    required String siteId,
+    required String note,
+  }) async {
+    if (siteById(siteId) == null) {
+      throw const InvalidInput('現場が見つかりません。');
+    }
+    final current = planFor(day);
+    final sites = [
+      for (final s in current.sites)
+        if (s.siteId != siteId) s,
+      current.site(siteId).copyWith(note: note),
+    ];
+    await savePlan(current.copyWith(sites: sites));
+  }
+
+  /// Adds a 1人工 出面 for each planned worker who does not yet have an
+  /// entry that day. Existing 出面 are left unchanged. Follows the usual
+  /// month lock (free users: this month only).
+  Future<int> applyPlanAsAttendance(DateTime day) async {
+    _ensureMonthOpen(day);
+    final plan = planFor(day);
+    if (plan.isEmpty) throw const InvalidInput('予定がまだありません。');
+    var added = 0;
+    for (final site in plan.sites) {
+      if (siteById(site.siteId) == null) continue;
+      for (final workerId in site.workerIds) {
+        final worker = workerById(workerId);
+        if (worker == null) continue;
+        if (recordsFor(workerId, day).isNotEmpty) continue;
+        await setRecord(
+          workerId: workerId,
+          day: day,
+          siteId: site.siteId,
+          units: 1,
+          overtimeHours: 0,
+        );
+        added++;
+      }
+    }
+    return added;
+  }
+
+  Future<Uint8List> planImageBytes(DateTime day) async {
+    final plan = planFor(day);
+    if (plan.isEmpty) throw const InvalidInput('予定がまだありません。');
+    final content = planImageContent(
+      plan: plan,
+      day: DateTime(day.year, day.month, day.day),
+      sites: sites,
+      workers: workers,
+      businessName: businessName,
+    );
+    if (content.isEmpty) throw const InvalidInput('予定がまだありません。');
+    return renderPlanPng(content: content, fontData: await _fontData());
+  }
+
+  Future<String> exportPlanImage(DateTime day) async {
+    final bytes = await planImageBytes(day);
+    return repository.writeExport(planFileName(day), bytes);
+  }
+
+  List<DayPlan> _plansWithout({String? workerId, String? siteId}) {
+    return [
+      for (final plan in plans)
+        DayPlan(
+          day: plan.day,
+          sites: [
+            for (final s in plan.sites)
+              if (siteId == null || s.siteId != siteId)
+                s.copyWith(
+                  workerIds: [
+                    for (final id in s.workerIds)
+                      if (id != workerId) id,
+                  ],
+                ),
+          ],
+        ),
+    ];
+  }
+
+  List<DayPlan> _prunePlans(List<DayPlan> input) {
+    final today = DateTime(_now().year, _now().month, _now().day);
+    final start = today.subtract(const Duration(days: planRetentionDays));
+    final end = DateTime(
+      today.year,
+      today.month,
+      today.day + planRetentionDays,
+    );
+    return [
+      for (final plan in input)
+        if (!plan.isEmpty)
+          if (_inWindow(plan.day, start, end)) plan,
+    ];
+  }
+
+  bool _inWindow(String key, DateTime start, DateTime end) {
+    final day = tryParseDayKey(key);
+    if (day == null) return false;
+    return !day.isBefore(start) && !day.isAfter(end);
   }
 
   // ---------------------------------------------------------------- summary

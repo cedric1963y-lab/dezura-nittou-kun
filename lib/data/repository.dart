@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:path/path.dart' as p;
 
+import '../models/plans.dart';
 import '../models/records.dart';
 import '../plan/entitlement.dart';
 
@@ -86,6 +87,48 @@ class Repository {
     return _atomicWrite(
       'settings.json',
       _encoder.convert({...settings, 'version': 1}),
+    );
+  }
+
+  /// Schema of plans.json (separate from workers / sites / records).
+  static const planSchemaVersion = 1;
+  static const _readablePlanVersions = {1};
+
+  Future<List<DayPlan>> loadPlans() async {
+    final file = File(p.join(root.path, 'plans.json'));
+    if (!await file.exists()) return [];
+    final text = await file.readAsString();
+    if (text.trim().isEmpty) return [];
+    final decoded = jsonDecode(text);
+    if (decoded is! Map) {
+      throw const FormatException('保存データの形式が不正です。');
+    }
+    final json = Map<String, dynamic>.from(decoded);
+    final version = json['version'];
+    if (!_readablePlanVersions.contains(version)) {
+      throw FormatException('未対応の保存データです（version: $version）。');
+    }
+    final list = json['plans'];
+    if (list is! List) return [];
+    return [
+      for (final item in list)
+        if (item is Map<String, dynamic>)
+          DayPlan.fromJson(item)
+        else if (item is Map)
+          DayPlan.fromJson(Map<String, dynamic>.from(item)),
+    ];
+  }
+
+  Future<void> savePlans(List<DayPlan> plans) {
+    return _atomicWrite(
+      'plans.json',
+      _encoder.convert({
+        'version': planSchemaVersion,
+        'plans': [
+          for (final p in plans)
+            if (!p.isEmpty && p.day.isNotEmpty) p.toJson(),
+        ],
+      }),
     );
   }
 

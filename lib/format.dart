@@ -71,6 +71,19 @@ String formatDayHeading(DateTime value) {
   return '${value.month}月${value.day}日（${weekdayLabel(value)}）';
 }
 
+/// The calendar day after [now], ignoring the clock time.
+DateTime tomorrowOf(DateTime now) => DateTime(now.year, now.month, now.day + 1);
+
+/// Title on the 予定 image, for example `11月20日（金）の予定`.
+String formatPlanTitle(DateTime day) => '${formatDayHeading(day)}の予定';
+
+/// File name for the share sheet, for example `予定_2026年11月20日.png`.
+String planFileName(DateTime day) {
+  final m = day.month.toString().padLeft(2, '0');
+  final d = day.day.toString().padLeft(2, '0');
+  return '予定_${day.year}年$m月$d日.png';
+}
+
 String formatShortDate(DateTime value) {
   return '${value.month}/${value.day}（${weekdayLabel(value)}）';
 }

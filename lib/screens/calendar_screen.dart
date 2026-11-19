@@ -9,6 +9,7 @@ import '../services/review_prompt.dart';
 import '../state/app_controller.dart';
 import '../theme.dart';
 import '../widgets/dialogs.dart';
+import 'plan_screen.dart';
 import 'record_sheet.dart';
 
 class CalendarScreen extends StatefulWidget {
@@ -84,6 +85,17 @@ class _CalendarScreenState extends State<CalendarScreen> {
             month: month,
             onPrevious: () => _changeMonth(controller, -1),
             onNext: atCurrentMonth ? null : () => _changeMonth(controller, 1),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            key: const Key('open-plan'),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (_) => const PlanScreen()),
+              );
+            },
+            icon: const Icon(Icons.event_note_outlined),
+            label: const Text('明日の予定'),
           ),
           _MonthGrid(
             month: month,
