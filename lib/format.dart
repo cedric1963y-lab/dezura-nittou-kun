@@ -87,11 +87,27 @@ String formatYen(int yen) {
   return '${negative ? '-' : ''}¥$buffer';
 }
 
-/// 1.0 -> `1`, 0.5 -> `0.5`, 12.5 -> `12.5`.
+/// 1.0 -> `1`, 0.5 -> `0.5`, 1.1 -> `1.1`, 12.5 -> `12.5`.
 String formatUnits(double units) {
-  final rounded = (units * 10).round() / 10;
+  final rounded = roundUnits(units);
   if (rounded == rounded.roundToDouble()) return rounded.toInt().toString();
   return rounded.toStringAsFixed(1);
+}
+
+/// 人工 is stored and shown in 0.1 steps. Rounding here avoids
+/// `0.1 + 0.2 != 0.3` float noise.
+double roundUnits(double units) => (units * 10).round() / 10;
+
+/// One cell of the 出面 grid: ○ / 半 / a number. 夜 marks a day with 夜勤.
+String attendanceMark(double? units, {bool night = false}) {
+  if (units == null || units <= 0) return '';
+  final rounded = roundUnits(units);
+  final base = rounded == 1
+      ? '○'
+      : rounded == 0.5
+      ? '半'
+      : formatUnits(rounded);
+  return night ? '$base夜' : base;
 }
 
 String formatHours(double hours) => '${formatUnits(hours)}h';

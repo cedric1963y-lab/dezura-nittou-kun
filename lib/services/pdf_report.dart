@@ -287,7 +287,7 @@ pw.Widget _grid(MonthSummary summary, int days) {
       ),
       pw.SizedBox(height: 4),
       pw.Text(
-        '○ = 1人工　半 = 0.5人工　数字 = その日の人工合計（2件以上・1人工超）　夜 = 夜勤を含む日',
+        '○ = 1人工　半 = 0.5人工　数字 = 1・0.5以外の人工（1.1など、または同日の合計）　夜 = 夜勤を含む日',
         style: const pw.TextStyle(color: _muted, fontSize: 7),
       ),
     ],
@@ -406,7 +406,7 @@ pw.Widget _breakdownTable(MonthSummary summary) {
             w.kind == WorkerKind.contractor
                 ? '${_clip(w.worker.name, 7)}（外注）'
                 : _clip(w.worker.name, 10),
-            _clip(b.site.name, 16),
+            _siteCell(b.site),
             b.shift.label,
             '${b.days}日',
             formatUnits(b.units),
@@ -425,7 +425,7 @@ pw.Widget _siteTable(MonthSummary summary) {
     rows: [
       for (final s in summary.sites)
         [
-          _clip(s.site.isAreaSite ? '${s.site.name}（平米）' : s.site.name, 16),
+          _siteCell(s.site, areaSuffix: true),
           '${s.workerCount}人',
           formatUnits(s.units),
           formatYen(s.amount),
@@ -553,17 +553,10 @@ pw.Widget _footer(int page, int pages) {
   );
 }
 
-/// One cell of the grid. A single 1 or 0.5 shows ○ / 半; several entries or
-/// more than 1人工 show the day's total. 夜 marks a day with 夜勤.
-String _mark(double? units, {bool night = false}) {
-  if (units == null || units <= 0) return '';
-  final base = units == 1
-      ? '○'
-      : units == 0.5
-      ? '半'
-      : formatUnits(units);
-  return night ? '$base夜' : base;
-}
+/// One cell of the grid. A single 1 or 0.5 shows ○ / 半; other 人工
+/// (1.1, a crew, or several entries) show the day's total.
+String _mark(double? units, {bool night = false}) =>
+    attendanceMark(units, night: night);
 
 double _markSize(double? units, bool night) {
   final longText = (units ?? 0) > 0 && (night || (units ?? 0) >= 10);
@@ -576,6 +569,14 @@ String _clip(String value, int max) {
   return '${String.fromCharCodes(runes.take(max - 1))}…';
 }
 
+/// Site name, plus the address on a second line when it is set.
+String _siteCell(Site site, {bool areaSuffix = false, int nameMax = 16}) {
+  final name = areaSuffix && site.isAreaSite ? '${site.name}（平米）' : site.name;
+  final head = _clip(name, nameMax);
+  final address = site.address.trim();
+  if (address.isEmpty) return head;
+  return '$head\n${_clip(address, 22)}';
+}
 
 /// Personal 出面明細 for one worker only (portrait A4). No other workers.
 Future<Uint8List> buildWorkerMonthlyPdf({
@@ -604,42 +605,40 @@ Future<Uint8List> buildWorkerMonthlyPdf({
   );
 
   List<String> headers() => [
-        '日付',
-        '現場',
-        '昼夜',
-        '人工',
-        '日当',
-        if (showAllowance) '色付け',
-        if (showTransport) '交通費',
-        if (showParking) '駐車場代',
-        '金額',
-      ];
+    '日付',
+    '現場',
+    '昼夜',
+    '人工',
+    '日当',
+    if (showAllowance) '色付け',
+    if (showTransport) '交通費',
+    if (showParking) '駐車場代',
+    '金額',
+  ];
 
   List<String> dayRow(WorkerDayLine line) => [
-        line.record.day,
-        _clip(line.site?.name ?? '', 16),
-        line.record.shift.label,
-        formatUnits(line.record.units),
-        line.wage > 0 ? formatYen(line.wage) : '-',
-        if (showAllowance)
-          line.allowance > 0 ? formatYen(line.allowance) : '-',
-        if (showTransport)
-          line.transport > 0 ? formatYen(line.transport) : '-',
-        if (showParking) line.parking > 0 ? formatYen(line.parking) : '-',
-        formatYen(line.amount),
-      ];
+    line.record.day,
+    line.site == null ? '' : _siteCell(line.site!),
+    line.record.shift.label,
+    formatUnits(line.record.units),
+    line.wage > 0 ? formatYen(line.wage) : '-',
+    if (showAllowance) line.allowance > 0 ? formatYen(line.allowance) : '-',
+    if (showTransport) line.transport > 0 ? formatYen(line.transport) : '-',
+    if (showParking) line.parking > 0 ? formatYen(line.parking) : '-',
+    formatYen(line.amount),
+  ];
 
   List<String> extraRow(String label, int yen) => [
-        monthKey(month),
-        label,
-        '',
-        '',
-        '',
-        if (showAllowance) '',
-        if (showTransport) '',
-        if (showParking) '',
-        formatYen(yen),
-      ];
+    monthKey(month),
+    label,
+    '',
+    '',
+    '',
+    if (showAllowance) '',
+    if (showTransport) '',
+    if (showParking) '',
+    formatYen(yen),
+  ];
 
   final rows = [for (final line in lines) dayRow(line)];
   if (worker.salary > 0) rows.add(extraRow('月給', worker.salary));

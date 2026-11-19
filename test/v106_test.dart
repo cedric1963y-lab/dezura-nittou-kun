@@ -124,7 +124,7 @@ void main() {
     );
 
     test('unknown future version is rejected', () async {
-      write('records.json', {'version': 5, 'records': []});
+      write('records.json', {'version': 6, 'records': []});
       await expectLater(
         Repository(directory).loadRecords(),
         throwsA(isA<FormatException>()),
@@ -331,7 +331,7 @@ void main() {
       c.dispose();
     });
 
-    test('limits: 日当 up to 99 in 0.5 steps, 時給 and 月給 stay 0.5 or 1', () async {
+    test('limits: 日当 up to 99 in 0.1 steps, 時給 and 月給 stay 0.5 or 1', () async {
       final c = await openController(directory, premium: true);
       final a = await c.addSite(name: 'A');
       final daily = await c.addWorker(name: '日当', dayRate: 10000);
@@ -358,7 +358,9 @@ void main() {
       expect(c.recordFor(daily.id, day)!.amount, 990000);
       await expectLater(set(daily, 99.5), throwsA(isA<InvalidInput>()));
       await expectLater(set(daily, 0), throwsA(isA<InvalidInput>()));
-      await expectLater(set(daily, 1.3), throwsA(isA<InvalidInput>()));
+      await set(daily, 1.3);
+      expect(c.recordFor(daily.id, day)!.units, 1.3);
+      await expectLater(set(daily, 1.25), throwsA(isA<InvalidInput>()));
       await expectLater(set(hourly, 2), throwsA(isA<InvalidInput>()));
       await expectLater(set(monthly, 2), throwsA(isA<InvalidInput>()));
       await set(hourly, 0.5);

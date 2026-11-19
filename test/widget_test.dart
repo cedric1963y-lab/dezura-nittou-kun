@@ -75,12 +75,17 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 200));
     });
     await frames(tester);
-    expect(find.descendant(of: tile, matching: find.text('半日')), findsOneWidget);
+    expect(
+      find.descendant(of: tile, matching: find.text('半日')),
+      findsOneWidget,
+    );
     expect(find.text('0.5人工'), findsOneWidget);
     controller.dispose();
   });
 
-  testWidgets('summary shows totals and past months are locked', (tester) async {
+  testWidgets('summary shows totals and past months are locked', (
+    tester,
+  ) async {
     final controller = await tester.runAsync(() async {
       final c = await openController(directory);
       await c.addSite(name: '港北倉庫改修');
@@ -112,7 +117,7 @@ void main() {
     await frames(tester);
 
     expect(find.text('月額ではじめる'), findsOneWidget);
-    expect(find.text('¥100'), findsOneWidget);
+    expect(find.text('¥300'), findsOneWidget);
     final scrollable = find.descendant(
       of: find.byType(ListView).last,
       matching: find.byType(Scrollable),
@@ -122,7 +127,7 @@ void main() {
       300,
       scrollable: scrollable,
     );
-    expect(find.text('¥1,200'), findsOneWidget);
+    expect(find.text('¥3,000'), findsOneWidget);
     expect(find.textContaining('自動更新され'), findsOneWidget);
     expect(find.text('購入を復元'), findsOneWidget);
     expect(find.text('利用規約（EULA）'), findsOneWidget);

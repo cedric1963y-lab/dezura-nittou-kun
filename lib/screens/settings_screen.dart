@@ -124,16 +124,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const Panel(
             child: _Block(
               title: '使い方',
-              body:
-                  '1.「名簿」で職人（自分も含む）と日当、現場を登録\n2.「出面」で日付を選び、職人をタップ（1人工 → 半日 → 取消）\n3. 残業や別の現場は「…」から\n4.「集計」で月の人工と日当を確認し、LINEやPDFで送る',
+              body: '1.「名簿」で職人（自分も含む）と日当、現場を登録\n2.「出面」で日付を選び、職人をタップ（1人工 → 半日 → 取消）\n3. 残業や別の現場は「…」から\n4.「集計」で月の人工と日当を確認し、LINEやPDFで送る',
             ),
           ),
           const SizedBox(height: 10),
           const Panel(
             child: _Block(
               title: 'データの保存場所',
-              body:
-                  '出面・名簿・現場はこのiPhoneの中だけに保存されます。アカウントは不要で、運営のサーバーには送りません。\n\niPhoneのバックアップをオンにしている場合、Appleのバックアップに含まれることがあります。アプリを削除すると、データも消えます。',
+              body: '出面・名簿・現場はこのiPhoneの中だけに保存されます。アカウントは不要で、運営のサーバーには送りません。\n\niPhoneのバックアップをオンにしている場合、Appleのバックアップに含まれることがあります。アプリを削除すると、データも消えます。',
             ),
           ),
           const SizedBox(height: 10),
@@ -141,10 +139,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             padding: EdgeInsets.zero,
             child: Column(
               children: [
-                _LinkTile(
-                  label: '利用規約（Apple標準EULA）',
-                  url: AppLinks.appleEula,
-                ),
+                _LinkTile(label: '利用規約（Apple標準EULA）', url: AppLinks.appleEula),
                 const Divider(height: 1),
                 _LinkTile(label: 'プライバシーポリシー', url: AppLinks.privacy),
                 const Divider(height: 1),

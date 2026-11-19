@@ -5,6 +5,7 @@ import '../errors.dart';
 import '../format.dart';
 import '../models/records.dart';
 import '../plan/limits.dart';
+import '../services/links.dart';
 import '../state/app_controller.dart';
 import '../theme.dart';
 import '../widgets/dialogs.dart';
@@ -155,17 +156,30 @@ class _RosterScreenState extends State<RosterScreen> {
               subtitle: Text(
                 [
                   if (s.isAreaSite) '平米の現場',
+                  if (s.address.isNotEmpty) s.address,
                   if (s.note.isNotEmpty) s.note,
                   '出面 ${controller.recordCountForSite(s.id)}件',
                 ].join('・'),
               ),
-              trailing: PopupMenuButton<String>(
-                onSelected: (value) => value == 'edit'
-                    ? _editSite(controller, s.id)
-                    : _deleteSite(controller, s.id),
-                itemBuilder: (_) => const [
-                  PopupMenuItem(value: 'edit', child: Text('編集')),
-                  PopupMenuItem(value: 'delete', child: Text('削除')),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (s.address.isNotEmpty)
+                    IconButton(
+                      key: Key('site-map-${s.id}'),
+                      tooltip: '地図で開く',
+                      icon: const Icon(Icons.map_outlined),
+                      onPressed: () => _openSiteMap(s.address),
+                    ),
+                  PopupMenuButton<String>(
+                    onSelected: (value) => value == 'edit'
+                        ? _editSite(controller, s.id)
+                        : _deleteSite(controller, s.id),
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(value: 'edit', child: Text('編集')),
+                      PopupMenuItem(value: 'delete', child: Text('削除')),
+                    ],
+                  ),
                 ],
               ),
               onTap: () => _editSite(controller, s.id),
@@ -242,6 +256,11 @@ class _RosterScreenState extends State<RosterScreen> {
     await guard(context, () => controller.deleteWorker(id));
   }
 
+  Future<void> _openSiteMap(String address) async {
+    final ok = await openAppleMaps(address);
+    if (!ok && mounted) showSnack(context, '地図を開けませんでした。');
+  }
+
   Future<void> _addSite(AppController controller) async {
     if (!controller.canAddSite) {
       await openPremium(context, reason: LimitKind.sites);
@@ -254,6 +273,7 @@ class _RosterScreenState extends State<RosterScreen> {
       () => controller.addSite(
         name: draft.name,
         note: draft.note,
+        address: draft.address,
         isAreaSite: draft.isAreaSite,
         areaAmountMode: draft.areaAmountMode,
         areaSqm: draft.areaSqm,
@@ -273,6 +293,7 @@ class _RosterScreenState extends State<RosterScreen> {
       saveLabel: '保存',
       initialName: s.name,
       initialNote: s.note,
+      initialAddress: s.address,
       initialIsAreaSite: s.isAreaSite,
       initialAreaAmountMode: s.areaAmountMode,
       initialAreaSqm: s.areaSqm,
@@ -288,6 +309,7 @@ class _RosterScreenState extends State<RosterScreen> {
         id: id,
         name: draft.name,
         note: draft.note,
+        address: draft.address,
         isAreaSite: draft.isAreaSite,
         areaAmountMode: draft.areaAmountMode,
         areaSqm: draft.areaSqm,

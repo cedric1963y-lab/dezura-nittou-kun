@@ -182,7 +182,9 @@ class _RecordSheetState extends State<_RecordSheet> {
               children: [
                 for (final site in controller.sites)
                   ChoiceChip(
-                    label: Text(site.isAreaSite ? '${site.name}（平米）' : site.name),
+                    label: Text(
+                      site.isAreaSite ? '${site.name}（平米）' : site.name,
+                    ),
                     selected: site.id == _siteId,
                     onSelected: (_) => setState(() => _siteId = site.id),
                   ),
@@ -216,9 +218,11 @@ class _RecordSheetState extends State<_RecordSheet> {
                 children: [
                   IconButton.outlined(
                     key: const Key('units-minus'),
-                    onPressed: _units <= 0.5
+                    onPressed: roundUnits(_units) <= dailyUnitStep
                         ? null
-                        : () => setState(() => _units -= 0.5),
+                        : () => setState(
+                            () => _units = roundUnits(_units - dailyUnitStep),
+                          ),
                     icon: const Icon(Icons.remove),
                   ),
                   Expanded(
@@ -234,9 +238,14 @@ class _RecordSheetState extends State<_RecordSheet> {
                   ),
                   IconButton.outlined(
                     key: const Key('units-plus'),
-                    onPressed: _units >= maxUnitsPerRecord
+                    onPressed: roundUnits(_units) >= maxUnitsPerRecord
                         ? null
-                        : () => setState(() => _units += 0.5),
+                        : () => setState(() {
+                            final next = roundUnits(_units + dailyUnitStep);
+                            _units = next > maxUnitsPerRecord
+                                ? maxUnitsPerRecord
+                                : next;
+                          }),
                     icon: const Icon(Icons.add),
                   ),
                 ],
@@ -245,11 +254,11 @@ class _RecordSheetState extends State<_RecordSheet> {
               Wrap(
                 spacing: 8,
                 children: [
-                  for (final quick in const [0.5, 1.0, 2.0, 3.0, 5.0, 10.0])
+                  for (final quick in dailyUnitQuickPicks)
                     ChoiceChip(
                       key: Key('units-$quick'),
                       label: Text(formatUnits(quick)),
-                      selected: _units == quick,
+                      selected: roundUnits(_units) == quick,
                       onSelected: (_) => setState(() => _units = quick),
                     ),
                 ],
@@ -312,50 +321,50 @@ class _RecordSheetState extends State<_RecordSheet> {
               ),
             ],
             if (!isArea) ...[
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                const Expanded(
-                  child: Text(
-                    '残業',
-                    style: TextStyle(fontWeight: FontWeight.w800),
-                  ),
-                ),
-                IconButton.outlined(
-                  key: const Key('overtime-minus'),
-                  onPressed: _overtime <= 0
-                      ? null
-                      : () => setState(() => _overtime -= 0.5),
-                  icon: const Icon(Icons.remove),
-                ),
-                SizedBox(
-                  width: 72,
-                  child: Text(
-                    formatHours(_overtime),
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      '残業',
+                      style: TextStyle(fontWeight: FontWeight.w800),
                     ),
                   ),
-                ),
-                IconButton.outlined(
-                  key: const Key('overtime-plus'),
-                  onPressed: _overtime >= 12
-                      ? null
-                      : () => setState(() => _overtime += 0.5),
-                  icon: const Icon(Icons.add),
-                ),
-              ],
-            ),
-            if (overtimeRate == 0 && _overtime > 0)
-              const Padding(
-                padding: EdgeInsets.only(top: 4),
-                child: Text(
-                  '残業単価が0円のため、時間だけ記録します。単価は「名簿」で設定できます。',
-                  style: TextStyle(color: AppColors.muted, fontSize: 12),
-                ),
+                  IconButton.outlined(
+                    key: const Key('overtime-minus'),
+                    onPressed: _overtime <= 0
+                        ? null
+                        : () => setState(() => _overtime -= 0.5),
+                    icon: const Icon(Icons.remove),
+                  ),
+                  SizedBox(
+                    width: 72,
+                    child: Text(
+                      formatHours(_overtime),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                  IconButton.outlined(
+                    key: const Key('overtime-plus'),
+                    onPressed: _overtime >= 12
+                        ? null
+                        : () => setState(() => _overtime += 0.5),
+                    icon: const Icon(Icons.add),
+                  ),
+                ],
               ),
+              if (overtimeRate == 0 && _overtime > 0)
+                const Padding(
+                  padding: EdgeInsets.only(top: 4),
+                  child: Text(
+                    '残業単価が0円のため、時間だけ記録します。単価は「名簿」で設定できます。',
+                    style: TextStyle(color: AppColors.muted, fontSize: 12),
+                  ),
+                ),
             ],
             if (!isArea) ...[
               const SizedBox(height: 14),
@@ -390,7 +399,11 @@ class _RecordSheetState extends State<_RecordSheet> {
                 child: Text(
                   'この現場は平米割りです。日当は付きません。分けた金額は、現場の集計月に出ます。',
                   key: Key('area-site-note'),
-                  style: TextStyle(color: AppColors.muted, fontSize: 13, height: 1.4),
+                  style: TextStyle(
+                    color: AppColors.muted,
+                    fontSize: 13,
+                    height: 1.4,
+                  ),
                 ),
               ),
             const SizedBox(height: 12),

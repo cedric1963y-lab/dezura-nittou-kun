@@ -69,7 +69,11 @@ void main() {
       AppLinks.privacy,
       'https://cedric1963y-lab.github.io/dezura-nittou-kun/privacy.html',
     );
-    for (final page in ['docs/index.html', 'docs/privacy.html', 'docs/terms.html']) {
+    for (final page in [
+      'docs/index.html',
+      'docs/privacy.html',
+      'docs/terms.html',
+    ]) {
       final html = File(page).readAsStringSync();
       expect(html, contains('出面・日当くん'));
       expect(html, contains(PlanLimits.bundleId));
@@ -91,7 +95,10 @@ void main() {
     );
     expect(description.last, 'プライバシーポリシー: ${AppLinks.privacy}');
     final promoStart = meta.indexOf('## プロモーションテキスト');
-    final promo = meta.substring(promoStart, meta.indexOf('## ', promoStart + 5));
+    final promo = meta.substring(
+      promoStart,
+      meta.indexOf('## ', promoStart + 5),
+    );
     expect(promo, isNot(contains('¥')));
     expect(promo, isNot(contains('円')));
   });

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app_scope.dart';
 import '../services/review_prompt.dart';
 import '../format.dart';
+import '../models/records.dart';
 import 'calendar_screen.dart';
 import 'record_sheet.dart';
 import 'export_screen.dart';
@@ -18,7 +19,8 @@ class HomeShell extends StatefulWidget {
 
   /// 0-3 picks a tab. Debug screenshot runs also use 10 (集計 then 出力),
   /// 11 (プレミアム), 12 (平米の現場の編集), 13 (職人の道具箱), 14 (色付け),
-  /// 15 (交通費・駐車場代), 16 (個人明細PDF).
+  /// 15 (交通費・駐車場代), 16 (個人明細PDF), 17 (現場の住所編集),
+  /// 18 (人工のチップ), 19 (住所つき集計), 20 (住所つき個人明細PDF).
   final int startTab;
 
   @override
@@ -31,6 +33,10 @@ class _HomeShellState extends State<HomeShell> {
     12 => 2,
     13 => 3,
     16 => 1,
+    17 => 2,
+    18 => 0,
+    19 => 1,
+    20 => 1,
     _ => widget.startTab.clamp(0, 3),
   };
 
@@ -56,13 +62,27 @@ class _HomeShellState extends State<HomeShell> {
           );
           return;
         }
-        if (widget.startTab == 14 || widget.startTab == 15) {
+        if (widget.startTab == 14 ||
+            widget.startTab == 15 ||
+            widget.startTab == 18) {
           final c = AppScope.of(context);
           final rec = widget.startTab == 14
               ? c.records.where((r) => r.allowance > 0).firstOrNull
+              : widget.startTab == 15
+              ? c.records
+                    .where((r) => r.transport > 0 || r.parking > 0)
+                    .firstOrNull
               : c.records
-                  .where((r) => r.transport > 0 || r.parking > 0)
-                  .firstOrNull;
+                        .where(
+                          (r) =>
+                              r.payType == PayType.daily &&
+                              r.units != 1 &&
+                              r.units != 0.5,
+                        )
+                        .firstOrNull ??
+                    c.records
+                        .where((r) => r.payType == PayType.daily)
+                        .firstOrNull;
           final worker = rec == null ? null : c.workerById(rec.workerId);
           final day = rec == null ? null : tryParseDayKey(rec.day);
           if (worker != null && day != null) {
@@ -75,17 +95,15 @@ class _HomeShellState extends State<HomeShell> {
           }
           return;
         }
-        if (widget.startTab == 16) {
+        if (widget.startTab == 16 || widget.startTab == 20) {
           final c = AppScope.of(context);
           final month = DateTime(c.now.year, c.now.month);
           final first = c.summaryFor(month).workers.firstOrNull;
           if (first != null) {
             Navigator.of(context).push(
               MaterialPageRoute<void>(
-                builder: (_) => WorkerPdfScreen(
-                  month: month,
-                  workerId: first.worker.id,
-                ),
+                builder: (_) =>
+                    WorkerPdfScreen(month: month, workerId: first.worker.id),
               ),
             );
           }
@@ -101,10 +119,14 @@ class _HomeShellState extends State<HomeShell> {
         index: _index,
         children: [
           const CalendarScreen(),
-          const SummaryScreen(),
+          SummaryScreen(scrollToSites: widget.startTab == 19),
           RosterScreen(
-            startOnSites: widget.startTab == 12,
-            autoEditSiteId: widget.startTab == 12 ? 's-area' : null,
+            startOnSites: widget.startTab == 12 || widget.startTab == 17,
+            autoEditSiteId: widget.startTab == 12
+                ? 's-area'
+                : widget.startTab == 17
+                ? 's1'
+                : null,
           ),
           SettingsScreen(scrollToToolbox: widget.startTab == 13),
         ],

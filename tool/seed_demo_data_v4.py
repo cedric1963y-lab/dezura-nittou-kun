@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""1.0.7 sample data: a 平米 site, 色付け, and a normal 日当 site.
+"""1.0.8 sample data: 1.0.7 plus site addresses and 0.1 人工.
 
 Usage: tool/seed_demo_data_v4.py <Documents dir>
 Only for screenshots. The app never ships with this data.
@@ -68,6 +68,8 @@ for d in range(1, today.day + 1):
         add("w1", k, "s1", 1, 2 if d % 5 == 0 else 0)
         if d % 2 == 0:
             add("w2", k, "s1", 1)
+        if d % 4 == 0:
+            add("w3", k, "s1", 1.2)
 
 
 def write(name, obj):
@@ -75,15 +77,16 @@ def write(name, obj):
         json.dump(obj, f, ensure_ascii=False, indent=2)
 
 
-write("workers.json", {"version": 4, "workers": [
+write("workers.json", {"version": 5, "workers": [
     {"id": w, "name": n, "kind": kind, "payType": "daily", "dayRate": r,
      "hourlyRate": 0, "monthlySalary": 0, "overtimeRate": o, "createdAt": created}
     for w, n, kind, r, o in workers]})
-write("sites.json", {"version": 4, "sites": [
+write("sites.json", {"version": 5, "sites": [
     {
         "id": "s-area",
         "name": "川崎物流センター床",
         "note": "〇〇建設",
+        "address": "川崎市川崎区日進町3-1",
         "createdAt": created,
         "isAreaSite": True,
         "areaAmountMode": "contract",
@@ -96,6 +99,7 @@ write("sites.json", {"version": 4, "sites": [
         "id": "s1",
         "name": "港北倉庫改修",
         "note": "△△工務店",
+        "address": "横浜市港北区新横浜2-6-1",
         "createdAt": created,
         "isAreaSite": False,
         "areaAmountMode": "areaTimesRate",
@@ -105,7 +109,7 @@ write("sites.json", {"version": 4, "sites": [
         "settlementMonth": "",
     },
 ]})
-write("records.json", {"version": 4, "records": records})
+write("records.json", {"version": 5, "records": records})
 write("settings.json", {"version": 1, "selectedSiteId": "s-area", "businessName": "山田工業"})
 write("entitlement.json", {"version": 1})
 print(f"wrote {len(records)} records to {root}")

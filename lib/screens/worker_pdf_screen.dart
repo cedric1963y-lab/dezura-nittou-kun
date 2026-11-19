@@ -40,7 +40,11 @@ class _WorkerPdfScreenState extends State<WorkerPdfScreen> {
         widget.month,
         widget.workerId,
       );
-      await for (final page in Printing.raster(pdf, pages: const [0], dpi: 144)) {
+      await for (final page in Printing.raster(
+        pdf,
+        pages: const [0],
+        dpi: 144,
+      )) {
         return await page.toPng();
       }
     } catch (_) {}

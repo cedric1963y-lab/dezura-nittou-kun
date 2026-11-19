@@ -11,8 +11,17 @@ void main() {
   test('units drop a trailing .0', () {
     expect(formatUnits(1), '1');
     expect(formatUnits(0.5), '0.5');
+    expect(formatUnits(1.1), '1.1');
+    expect(formatUnits(1.2), '1.2');
     expect(formatUnits(12.5), '12.5');
+    expect(formatUnits(0.1 + 0.2), '0.3');
     expect(formatHours(2), '2h');
+    expect(roundUnits(0.1 + 0.2), 0.3);
+    expect(attendanceMark(1), '○');
+    expect(attendanceMark(0.5), '半');
+    expect(attendanceMark(1.1), '1.1');
+    expect(attendanceMark(1.2, night: true), '1.2夜');
+    expect(attendanceMark(null), '');
   });
 
   test('day keys round-trip and share the month prefix', () {

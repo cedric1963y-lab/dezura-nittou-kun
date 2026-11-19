@@ -433,15 +433,16 @@ class _SitePicker extends StatelessWidget {
                   await guard(
                     context,
                     () => c.addSite(
-                    name: draft.name,
-                    note: draft.note,
-                    isAreaSite: draft.isAreaSite,
-                    areaAmountMode: draft.areaAmountMode,
-                    areaSqm: draft.areaSqm,
-                    areaUnitPrice: draft.areaUnitPrice,
-                    contractAmount: draft.contractAmount,
-                    settlementMonth: draft.settlementMonth,
-                  ),
+                      name: draft.name,
+                      note: draft.note,
+                      address: draft.address,
+                      isAreaSite: draft.isAreaSite,
+                      areaAmountMode: draft.areaAmountMode,
+                      areaSqm: draft.areaSqm,
+                      areaUnitPrice: draft.areaUnitPrice,
+                      contractAmount: draft.contractAmount,
+                      settlementMonth: draft.settlementMonth,
+                    ),
                   );
                 },
               ),
@@ -693,6 +694,7 @@ class _SetupCard extends StatelessWidget {
                   () => controller.addSite(
                     name: draft.name,
                     note: draft.note,
+                    address: draft.address,
                     isAreaSite: draft.isAreaSite,
                     areaAmountMode: draft.areaAmountMode,
                     areaSqm: draft.areaSqm,

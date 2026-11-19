@@ -4,6 +4,7 @@ import '../errors.dart';
 import '../format.dart';
 import '../models/records.dart';
 import '../screens/premium_screen.dart';
+import '../services/links.dart';
 import '../theme.dart';
 
 void showSnack(BuildContext context, String message) {
@@ -317,6 +318,7 @@ class SiteDraft {
   const SiteDraft({
     required this.name,
     required this.note,
+    this.address = '',
     this.isAreaSite = false,
     this.areaAmountMode = AreaAmountMode.areaTimesRate,
     this.areaSqm = 0,
@@ -327,6 +329,7 @@ class SiteDraft {
 
   final String name;
   final String note;
+  final String address;
   final bool isAreaSite;
   final AreaAmountMode areaAmountMode;
   final double areaSqm;
@@ -341,6 +344,7 @@ Future<SiteDraft?> showSiteDialog(
   String saveLabel = '追加',
   String initialName = '',
   String initialNote = '',
+  String initialAddress = '',
   bool initialIsAreaSite = false,
   AreaAmountMode initialAreaAmountMode = AreaAmountMode.areaTimesRate,
   double initialAreaSqm = 0,
@@ -356,6 +360,7 @@ Future<SiteDraft?> showSiteDialog(
       saveLabel: saveLabel,
       initialName: initialName,
       initialNote: initialNote,
+      initialAddress: initialAddress,
       initialIsAreaSite: initialIsAreaSite,
       initialAreaAmountMode: initialAreaAmountMode,
       initialAreaSqm: initialAreaSqm,
@@ -373,6 +378,7 @@ class _SiteDialog extends StatefulWidget {
     required this.saveLabel,
     required this.initialName,
     required this.initialNote,
+    required this.initialAddress,
     required this.initialIsAreaSite,
     required this.initialAreaAmountMode,
     required this.initialAreaSqm,
@@ -386,6 +392,7 @@ class _SiteDialog extends StatefulWidget {
   final String saveLabel;
   final String initialName;
   final String initialNote;
+  final String initialAddress;
   final bool initialIsAreaSite;
   final AreaAmountMode initialAreaAmountMode;
   final double initialAreaSqm;
@@ -401,6 +408,7 @@ class _SiteDialog extends StatefulWidget {
 class _SiteDialogState extends State<_SiteDialog> {
   late final _name = TextEditingController(text: widget.initialName);
   late final _note = TextEditingController(text: widget.initialNote);
+  late final _address = TextEditingController(text: widget.initialAddress);
   late final _sqm = TextEditingController(
     text: widget.initialAreaSqm > 0 ? formatUnits(widget.initialAreaSqm) : '',
   );
@@ -424,7 +432,8 @@ class _SiteDialogState extends State<_SiteDialog> {
   List<String> get _months {
     final first = DateTime(widget.now.year, widget.now.month - 24);
     return [
-      for (var i = 0; i < 37; i++) monthKey(DateTime(first.year, first.month + i)),
+      for (var i = 0; i < 37; i++)
+        monthKey(DateTime(first.year, first.month + i)),
     ];
   }
 
@@ -432,6 +441,7 @@ class _SiteDialogState extends State<_SiteDialog> {
   void dispose() {
     _name.dispose();
     _note.dispose();
+    _address.dispose();
     _sqm.dispose();
     _unitPrice.dispose();
     _contract.dispose();
@@ -477,7 +487,8 @@ class _SiteDialogState extends State<_SiteDialog> {
     } else {
       // Keep typed values so turning the switch back on is not a redo.
       sqm = double.tryParse(_sqm.text.replaceAll(',', '').trim()) ?? 0;
-      unit = int.tryParse(_unitPrice.text.replaceAll(RegExp(r'[^\d]'), '')) ?? 0;
+      unit =
+          int.tryParse(_unitPrice.text.replaceAll(RegExp(r'[^\d]'), '')) ?? 0;
       contract =
           int.tryParse(_contract.text.replaceAll(RegExp(r'[^\d]'), '')) ?? 0;
     }
@@ -486,6 +497,7 @@ class _SiteDialogState extends State<_SiteDialog> {
       SiteDraft(
         name: _name.text,
         note: _note.text,
+        address: _address.text,
         isAreaSite: _isArea,
         areaAmountMode: _mode,
         areaSqm: sqm,
@@ -524,6 +536,33 @@ class _SiteDialogState extends State<_SiteDialog> {
           ),
         ),
         const SizedBox(height: 12),
+        const SizedBox(height: 12),
+        TextField(
+          key: const Key('site-address'),
+          controller: _address,
+          maxLength: maxSiteAddressLength,
+          textInputAction: TextInputAction.next,
+          onChanged: (_) => setState(() {}),
+          decoration: InputDecoration(
+            labelText: '住所（任意）',
+            hintText: '例: 横浜市港北区新横浜2-6-1',
+            counterText: '',
+            suffixIcon: _address.text.trim().isEmpty
+                ? null
+                : IconButton(
+                    key: const Key('site-address-map'),
+                    tooltip: '地図で開く',
+                    icon: const Icon(Icons.map_outlined),
+                    onPressed: () async {
+                      final ok = await openAppleMaps(_address.text);
+                      if (!ok && context.mounted) {
+                        showSnack(context, '地図を開けませんでした。');
+                      }
+                    },
+                  ),
+          ),
+        ),
+        const SizedBox(height: 12),
         TextField(
           key: const Key('site-note'),
           controller: _note,
@@ -555,10 +594,7 @@ class _SiteDialogState extends State<_SiteDialog> {
                 value: AreaAmountMode.areaTimesRate,
                 label: Text('平米数×単価'),
               ),
-              ButtonSegment(
-                value: AreaAmountMode.contract,
-                label: Text('請負額'),
-              ),
+              ButtonSegment(value: AreaAmountMode.contract, label: Text('請負額')),
             ],
             selected: {_mode},
             showSelectedIcon: false,
@@ -569,7 +605,9 @@ class _SiteDialogState extends State<_SiteDialog> {
             TextField(
               key: const Key('area-sqm'),
               controller: _sqm,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               decoration: const InputDecoration(
                 labelText: '平米数',
                 hintText: '例: 120',

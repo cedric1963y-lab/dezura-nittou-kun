@@ -7,10 +7,10 @@ abstract final class PlanLimits {
   static const monthlyProductId = 'jp.dezura.app.premium.monthly';
   static const yearlyProductId = 'jp.dezura.app.premium.yearly';
   static const subscriptionGroupName = '出面・日当くん Premium';
-  static const monthlyPriceYen = 100;
-  static const yearlyPriceYen = 1200;
-  static const monthlyPriceLabel = '¥100';
-  static const yearlyPriceLabel = '¥1,200';
+  static const monthlyPriceYen = 300;
+  static const yearlyPriceYen = 3000;
+  static const monthlyPriceLabel = '¥300';
+  static const yearlyPriceLabel = '¥3,000';
   static const bundleId = 'jp.dezura.app';
 
   /// Introductory offer set in App Store Connect for both products.
@@ -76,7 +76,7 @@ abstract final class PlanLimits {
 
 abstract final class AppInfo {
   static const name = '出面・日当くん';
-  static const version = '1.0.7';
+  static const version = '1.0.8';
   static const tagline = '出面をタップで付けて、日当を月末に集計。';
 }
 

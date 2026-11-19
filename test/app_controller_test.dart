@@ -28,11 +28,15 @@ void main() {
     expect(c.canAddSite, isFalse);
     await expectLater(
       c.addWorker(name: '三人目', dayRate: 1),
-      throwsA(isA<LimitReached>().having((e) => e.kind, 'kind', LimitKind.workers)),
+      throwsA(
+        isA<LimitReached>().having((e) => e.kind, 'kind', LimitKind.workers),
+      ),
     );
     await expectLater(
       c.addSite(name: '二つ目'),
-      throwsA(isA<LimitReached>().having((e) => e.kind, 'kind', LimitKind.sites)),
+      throwsA(
+        isA<LimitReached>().having((e) => e.kind, 'kind', LimitKind.sites),
+      ),
     );
     c.dispose();
   });
@@ -98,13 +102,23 @@ void main() {
     final r = c.recordFor(w.id, day)!;
     expect(r.siteId, b.id);
     expect(r.amount, 18000 + 6250);
+    await c.setRecord(
+      workerId: w.id,
+      day: day,
+      siteId: b.id,
+      units: 0.7,
+      overtimeHours: 0,
+      recordId: r.id,
+    );
+    expect(c.recordFor(w.id, day)!.units, 0.7);
     await expectLater(
       c.setRecord(
         workerId: w.id,
         day: day,
         siteId: b.id,
-        units: 0.7,
+        units: 0.15,
         overtimeHours: 0,
+        recordId: r.id,
       ),
       throwsA(isA<InvalidInput>()),
     );
@@ -136,7 +150,9 @@ void main() {
     expect(c.canOpenMonth(DateTime(2026, 9)), isFalse);
     await expectLater(
       c.tapWorker(w.id, DateTime(2026, 9, 30)),
-      throwsA(isA<LimitReached>().having((e) => e.kind, 'kind', LimitKind.history)),
+      throwsA(
+        isA<LimitReached>().having((e) => e.kind, 'kind', LimitKind.history),
+      ),
     );
     expect(() => c.textFor(DateTime(2026, 9)), throwsA(isA<LimitReached>()));
     c.dispose();
@@ -150,9 +166,14 @@ void main() {
     expect(c.textFor(DateTime(2026, 10)), contains('山田　1人工（1日）　¥18,000'));
     await expectLater(
       c.exportPdf(DateTime(2026, 10)),
-      throwsA(isA<LimitReached>().having((e) => e.kind, 'kind', LimitKind.export)),
+      throwsA(
+        isA<LimitReached>().having((e) => e.kind, 'kind', LimitKind.export),
+      ),
     );
-    await expectLater(c.exportCsv(DateTime(2026, 10)), throwsA(isA<LimitReached>()));
+    await expectLater(
+      c.exportCsv(DateTime(2026, 10)),
+      throwsA(isA<LimitReached>()),
+    );
     c.dispose();
 
     final p = await openController(directory, premium: true);
@@ -182,8 +203,20 @@ void main() {
     final w1 = await c.addWorker(name: '1', dayRate: 1000);
     final w2 = await c.addWorker(name: '2', dayRate: 1000);
     final day = DateTime(2026, 10, 2);
-    await c.setRecord(workerId: w1.id, day: day, siteId: s1.id, units: 1, overtimeHours: 0);
-    await c.setRecord(workerId: w2.id, day: day, siteId: s2.id, units: 1, overtimeHours: 0);
+    await c.setRecord(
+      workerId: w1.id,
+      day: day,
+      siteId: s1.id,
+      units: 1,
+      overtimeHours: 0,
+    );
+    await c.setRecord(
+      workerId: w2.id,
+      day: day,
+      siteId: s2.id,
+      units: 1,
+      overtimeHours: 0,
+    );
     await c.deleteSite(s2.id);
     expect(c.records.length, 1);
     await c.deleteWorker(w1.id);
@@ -207,7 +240,10 @@ void main() {
     expect(gateway.lastProductId, PlanLimits.monthlyProductId);
     c.dispose();
 
-    final again = await openController(directory, purchases: FakePurchaseGateway(subscriptions: []));
+    final again = await openController(
+      directory,
+      purchases: FakePurchaseGateway(subscriptions: []),
+    );
     expect(again.premium, isFalse);
     again.dispose();
   });

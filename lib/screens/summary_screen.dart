@@ -14,7 +14,10 @@ import '../widgets/dialogs.dart';
 import 'export_screen.dart';
 
 class SummaryScreen extends StatefulWidget {
-  const SummaryScreen({super.key});
+  const SummaryScreen({this.scrollToSites = false, super.key});
+
+  /// Debug screenshot hook. Production leaves this false.
+  final bool scrollToSites;
 
   @override
   State<SummaryScreen> createState() => _SummaryScreenState();
@@ -22,6 +25,7 @@ class SummaryScreen extends StatefulWidget {
 
 class _SummaryScreenState extends State<SummaryScreen> {
   DateTime? _month;
+  final _sitesKey = GlobalKey();
 
   @override
   void didChangeDependencies() {
@@ -29,6 +33,22 @@ class _SummaryScreenState extends State<SummaryScreen> {
     if (_month == null) {
       final now = AppScope.of(context).now;
       _month = DateTime(now.year, now.month);
+    }
+    if (widget.scrollToSites) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        // ListView lazily lays out lower children; wait one frame with a
+        // large cacheExtent so 現場別 exists, then scroll to it.
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        if (!mounted) return;
+        final ctx = _sitesKey.currentContext;
+        if (ctx != null) {
+          Scrollable.ensureVisible(
+            ctx,
+            duration: Duration.zero,
+            alignment: 0.08,
+          );
+        }
+      });
     }
   }
 
@@ -50,6 +70,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
       appBar: AppBar(title: const Text('集計')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(14, 8, 14, 28),
+        cacheExtent: widget.scrollToSites ? 8000 : null,
         children: [
           MonthSwitcher(
             month: month,
@@ -122,7 +143,7 @@ class _SummaryScreenState extends State<SummaryScreen> {
           _WorkerList(workers: summary.workers, month: summary.month),
         ],
         const SizedBox(height: 16),
-        const _SectionTitle('現場別'),
+        _SectionTitle('現場別', key: _sitesKey),
         Panel(
           padding: EdgeInsets.zero,
           child: Column(
@@ -135,6 +156,18 @@ class _SummaryScreenState extends State<SummaryScreen> {
                       : summary.sites[i].site.name,
                   detail:
                       '${formatUnits(summary.sites[i].units)}人工・${summary.sites[i].workerCount}人${summary.sites[i].nightUnits > 0 ? '\n昼${formatUnits(summary.sites[i].dayUnits)}人工・夜勤${formatUnits(summary.sites[i].nightUnits)}人工' : ''}',
+                  address: summary.sites[i].site.address,
+                  addressKey: Key('site-address-${summary.sites[i].site.id}'),
+                  onAddressTap: summary.sites[i].site.address.trim().isEmpty
+                      ? null
+                      : () async {
+                          final ok = await openAppleMaps(
+                            summary.sites[i].site.address,
+                          );
+                          if (!ok && context.mounted) {
+                            showSnack(context, '地図を開けませんでした。');
+                          }
+                        },
                   extraLines: [
                     if (summary.sites[i].allowance > 0 ||
                         summary.sites[i].transport > 0 ||
@@ -258,14 +291,10 @@ class _WorkerList extends StatelessWidget {
                         w.areaAmount > 0) ...[
                       if (w.wageAmount > 0 || w.salary > 0)
                         '日当　${formatYen(w.wageAmount + w.salary)}',
-                      if (w.allowance > 0)
-                        '色付け　${formatYen(w.allowance)}',
-                      if (w.transport > 0)
-                        '交通費　${formatYen(w.transport)}',
-                      if (w.parking > 0)
-                        '駐車場代　${formatYen(w.parking)}',
-                      if (w.areaAmount > 0)
-                        '平米割り　${formatYen(w.areaAmount)}',
+                      if (w.allowance > 0) '色付け　${formatYen(w.allowance)}',
+                      if (w.transport > 0) '交通費　${formatYen(w.transport)}',
+                      if (w.parking > 0) '駐車場代　${formatYen(w.parking)}',
+                      if (w.areaAmount > 0) '平米割り　${formatYen(w.areaAmount)}',
                     ],
                   ],
                   amount: w.amount,
@@ -431,7 +460,7 @@ class _Stat extends StatelessWidget {
 }
 
 class _SectionTitle extends StatelessWidget {
-  const _SectionTitle(this.text);
+  const _SectionTitle(this.text, {super.key});
 
   final String text;
 
@@ -452,6 +481,9 @@ class _Row extends StatelessWidget {
     required this.title,
     required this.detail,
     required this.amount,
+    this.address,
+    this.onAddressTap,
+    this.addressKey,
     this.extraLines = const [],
     this.onShare,
     this.shareKey,
@@ -459,6 +491,9 @@ class _Row extends StatelessWidget {
 
   final String title;
   final String detail;
+  final String? address;
+  final VoidCallback? onAddressTap;
+  final Key? addressKey;
   final List<String> extraLines;
   final int amount;
   final VoidCallback? onShare;
@@ -487,6 +522,34 @@ class _Row extends StatelessWidget {
                   detail,
                   style: const TextStyle(color: AppColors.muted, fontSize: 13),
                 ),
+                if ((address ?? '').trim().isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: InkWell(
+                      key: addressKey,
+                      onTap: onAddressTap,
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.map_outlined,
+                            size: 14,
+                            color: AppColors.muted,
+                          ),
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              address!.trim(),
+                              style: const TextStyle(
+                                color: AppColors.muted,
+                                fontSize: 12,
+                                decoration: TextDecoration.underline,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 for (final line in extraLines)
                   Text(
                     '└ $line',

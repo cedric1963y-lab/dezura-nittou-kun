@@ -390,8 +390,8 @@ MonthSummary summarizeMonth({
       SiteTotal(
         site: site,
         units: here.fold(0, (sum, r) => sum + r.units),
-        allUnits: areaSiteUnits[site.id] ??
-            here.fold(0, (sum, r) => sum + r.units),
+        allUnits:
+            areaSiteUnits[site.id] ?? here.fold(0, (sum, r) => sum + r.units),
         wageAmount: wage,
         allowance: allowance,
         transport: transport,
@@ -582,43 +582,48 @@ String summaryAsCsv(MonthSummary summary) {
     final wage = site == null ? r.amount : wageOf(r, site);
     b.writeln(
       [
-        r.day,
-        _csv(names[r.workerId] ?? ''),
-        _csv(siteNames[r.siteId] ?? ''),
-        formatUnits(r.units),
-        formatUnits(r.overtimeHours),
-        r.payType == PayType.daily && (site == null || !site.isAreaSite)
-            ? r.dayRate
-            : '',
-        site != null && site.isAreaSite ? '' : r.overtimeRate,
-        wage,
-        r.payType.label,
-        r.payType == PayType.hourly ? formatUnits(r.hours) : '',
-        r.payType == PayType.hourly ? r.hourlyRate : '',
-        r.shift.label,
-        (kinds[r.workerId] ?? WorkerKind.employee).label,
-      ].join(',') +
-          extras(allowance: r.allowance, memo: r.allowanceMemo, transport: r.transport, parking: r.parking),
+            r.day,
+            _csv(names[r.workerId] ?? ''),
+            _csv(siteNames[r.siteId] ?? ''),
+            formatUnits(r.units),
+            formatUnits(r.overtimeHours),
+            r.payType == PayType.daily && (site == null || !site.isAreaSite)
+                ? r.dayRate
+                : '',
+            site != null && site.isAreaSite ? '' : r.overtimeRate,
+            wage,
+            r.payType.label,
+            r.payType == PayType.hourly ? formatUnits(r.hours) : '',
+            r.payType == PayType.hourly ? r.hourlyRate : '',
+            r.shift.label,
+            (kinds[r.workerId] ?? WorkerKind.employee).label,
+          ].join(',') +
+          extras(
+            allowance: r.allowance,
+            memo: r.allowanceMemo,
+            transport: r.transport,
+            parking: r.parking,
+          ),
     );
   }
   for (final w in summary.workers) {
     if (w.salary == 0) continue;
     b.writeln(
       [
-        monthKey(summary.month),
-        _csv(w.worker.name),
-        '',
-        '',
-        '',
-        '',
-        '',
-        w.salary,
-        '月給',
-        '',
-        '',
-        '',
-        w.kind.label,
-      ].join(',') +
+            monthKey(summary.month),
+            _csv(w.worker.name),
+            '',
+            '',
+            '',
+            '',
+            '',
+            w.salary,
+            '月給',
+            '',
+            '',
+            '',
+            w.kind.label,
+          ].join(',') +
           extras(),
     );
   }
@@ -627,20 +632,20 @@ String summaryAsCsv(MonthSummary summary) {
     // One row per worker for the month's 平米割り (all sites combined).
     b.writeln(
       [
-        monthKey(summary.month),
-        _csv(w.worker.name),
-        '',
-        '',
-        '',
-        '',
-        '',
-        w.areaAmount,
-        '平米割り',
-        '',
-        '',
-        '',
-        w.kind.label,
-      ].join(',') +
+            monthKey(summary.month),
+            _csv(w.worker.name),
+            '',
+            '',
+            '',
+            '',
+            '',
+            w.areaAmount,
+            '平米割り',
+            '',
+            '',
+            '',
+            w.kind.label,
+          ].join(',') +
           extras(),
     );
   }
@@ -694,8 +699,9 @@ List<WorkerDayLine> workerDayLines(MonthSummary summary, String workerId) {
       WorkerDayLine(
         record: r,
         site: siteById[r.siteId],
-        wage: siteById[r.siteId] == null ? r.amount : wageOf(r, siteById[r.siteId]!),
+        wage: siteById[r.siteId] == null
+            ? r.amount
+            : wageOf(r, siteById[r.siteId]!),
       ),
   ];
 }
-

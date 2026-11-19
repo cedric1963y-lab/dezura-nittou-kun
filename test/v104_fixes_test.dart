@@ -54,8 +54,10 @@ void main() {
 
   test('settings version matches pubspec', () {
     final pubspec = File('pubspec.yaml').readAsStringSync();
-    final match = RegExp(r'^version: ([0-9.]+)\+', multiLine: true)
-        .firstMatch(pubspec)!;
+    final match = RegExp(
+      r'^version: ([0-9.]+)\+',
+      multiLine: true,
+    ).firstMatch(pubspec)!;
     expect(AppInfo.version, match.group(1));
   });
 
@@ -69,7 +71,10 @@ void main() {
     });
     test('leap year Jan 31 -> Feb 29, Feb 29 yearly -> Feb 28', () {
       expect(
-        PlanLimits.periodEnd(PlanLimits.monthlyProductId, DateTime(2028, 1, 31)),
+        PlanLimits.periodEnd(
+          PlanLimits.monthlyProductId,
+          DateTime(2028, 1, 31),
+        ),
         DateTime(2028, 2, 29),
       );
       expect(
@@ -79,7 +84,10 @@ void main() {
     });
     test('normal day unchanged', () {
       expect(
-        PlanLimits.periodEnd(PlanLimits.monthlyProductId, DateTime(2026, 10, 8)),
+        PlanLimits.periodEnd(
+          PlanLimits.monthlyProductId,
+          DateTime(2026, 10, 8),
+        ),
         DateTime(2026, 11, 8),
       );
     });
@@ -170,7 +178,9 @@ void main() {
         final c = await openController(directory);
         await c.addSite(name: '港北倉庫改修');
         await c.addWorker(name: '山田 太郎', dayRate: 18000);
-        await c.addWorker(name: '', dayRate: 1).catchError((_) => c.workers.first);
+        await c
+            .addWorker(name: '', dayRate: 1)
+            .catchError((_) => c.workers.first);
         for (var d = 1; d <= 8; d++) {
           await c.tapWorker(c.workers.first.id, DateTime(2026, 10, d));
         }
@@ -202,8 +212,8 @@ void main() {
     await tester.pump();
 
     expect(find.text(PlanLimits.productsUnavailableMessage), findsOneWidget);
-    expect(find.text('¥100'), findsNothing);
-    expect(find.text('¥1,200'), findsNothing);
+    expect(find.text('¥300'), findsNothing);
+    expect(find.text('¥3,000'), findsNothing);
     final monthly = tester.widget<FilledButton>(
       find.byKey(const Key('buy-monthly')),
     );

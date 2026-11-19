@@ -65,6 +65,15 @@ enum Shift {
 /// Most 人工 one entry can hold (a 外注 crew).
 const maxUnitsPerRecord = 99.0;
 
+/// 日当 / 外注 quick picks. 時給 and 月給 stay 1 or 0.5 only.
+const dailyUnitQuickPicks = [0.5, 1.0, 1.2, 1.5, 2.0];
+
+/// ＋− step for 日当 / 外注 人工.
+const dailyUnitStep = 0.1;
+
+/// Longest optional 住所 on a site.
+const maxSiteAddressLength = 80;
+
 /// `日当 ¥18,000`, `時給 ¥1,500` or `月給 ¥300,000`. A 外注 paid per 人工 reads
 /// `単価 ¥18,000`.
 String payLabel(Worker worker) {
@@ -197,6 +206,7 @@ class Site {
     required this.name,
     required this.note,
     required this.createdAt,
+    this.address = '',
     this.isAreaSite = false,
     this.areaAmountMode = AreaAmountMode.areaTimesRate,
     this.areaSqm = 0,
@@ -210,6 +220,9 @@ class Site {
 
   /// Free text such as the general contractor (元請) name.
   final String note;
+
+  /// Optional site address. Empty when not set. Files before 1.0.8 have none.
+  final String address;
   final DateTime createdAt;
 
   /// When true, this site pays a lump 平米/請負 amount and no 日当.
@@ -241,6 +254,7 @@ class Site {
   Site copyWith({
     String? name,
     String? note,
+    String? address,
     bool? isAreaSite,
     AreaAmountMode? areaAmountMode,
     double? areaSqm,
@@ -252,6 +266,7 @@ class Site {
       id: id,
       name: name ?? this.name,
       note: note ?? this.note,
+      address: address ?? this.address,
       createdAt: createdAt,
       isAreaSite: isAreaSite ?? this.isAreaSite,
       areaAmountMode: areaAmountMode ?? this.areaAmountMode,
@@ -266,6 +281,7 @@ class Site {
     'id': id,
     'name': name,
     'note': note,
+    'address': address,
     'createdAt': createdAt.millisecondsSinceEpoch,
     'isAreaSite': isAreaSite,
     'areaAmountMode': areaAmountMode.key,
@@ -280,6 +296,7 @@ class Site {
       id: json['id'] as String,
       name: (json['name'] as String?) ?? '',
       note: (json['note'] as String?) ?? '',
+      address: (json['address'] as String?) ?? '',
       createdAt: DateTime.fromMillisecondsSinceEpoch(_int(json['createdAt'])),
       isAreaSite: json['isAreaSite'] == true,
       areaAmountMode: AreaAmountMode.fromKey(json['areaAmountMode']),
@@ -340,8 +357,9 @@ class DayRecord {
   final String day;
   final String siteId;
 
-  /// 人工: 1.0 for a full day, 0.5 for a half day, more for a 外注 crew
-  /// (0.5 steps, up to [maxUnitsPerRecord]).
+  /// 人工: 1.0 for a full day, 0.5 for a half day, or 0.1 steps (1.1, 1.2,
+  /// 1.5, …) up to [maxUnitsPerRecord] for 日当 / 外注. 時給 and 月給 stay
+  /// 1 or 0.5 only.
   final double units;
   final double overtimeHours;
   final int dayRate;

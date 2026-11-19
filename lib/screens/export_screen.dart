@@ -33,7 +33,11 @@ class _ExportScreenState extends State<ExportScreen> {
     final controller = AppScope.of(context);
     try {
       final pdf = await controller.pdfBytesFor(widget.month);
-      await for (final page in Printing.raster(pdf, pages: const [0], dpi: 144)) {
+      await for (final page in Printing.raster(
+        pdf,
+        pages: const [0],
+        dpi: 144,
+      )) {
         return await page.toPng();
       }
     } catch (_) {

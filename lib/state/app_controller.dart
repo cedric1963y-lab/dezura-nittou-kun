@@ -309,6 +309,7 @@ class AppController extends ChangeNotifier {
   Future<Site> addSite({
     required String name,
     String note = '',
+    String address = '',
     bool isAreaSite = false,
     AreaAmountMode areaAmountMode = AreaAmountMode.areaTimesRate,
     double areaSqm = 0,
@@ -329,6 +330,7 @@ class AppController extends ChangeNotifier {
       id: createId(),
       name: _requiredLine(name, '現場名', 30),
       note: _optionalLine(note, 40),
+      address: _optionalLine(address, maxSiteAddressLength),
       createdAt: _now(),
       isAreaSite: area.isAreaSite,
       areaAmountMode: area.areaAmountMode,
@@ -350,6 +352,7 @@ class AppController extends ChangeNotifier {
     required String id,
     required String name,
     String note = '',
+    String address = '',
     bool isAreaSite = false,
     AreaAmountMode areaAmountMode = AreaAmountMode.areaTimesRate,
     double areaSqm = 0,
@@ -371,6 +374,7 @@ class AppController extends ChangeNotifier {
       ..[index] = sites[index].copyWith(
         name: _requiredLine(name, '現場名', 30),
         note: _optionalLine(note, 40),
+        address: _optionalLine(address, maxSiteAddressLength),
         isAreaSite: area.isAreaSite,
         areaAmountMode: area.areaAmountMode,
         areaSqm: area.areaSqm,
@@ -466,9 +470,9 @@ class AppController extends ChangeNotifier {
   /// Adds an entry ([recordId] null) or edits one. A worker can have several
   /// entries on a day, but not two for the same 現場 and 昼/夜勤.
   ///
-  /// [units] is 0.5 or 1 for 時給 and 月給 workers, and any 0.5 step up to
-  /// [maxUnitsPerRecord] for 日当 (a 外注 crew). [hours] is the working time
-  /// of an hourly worker (0.5〜24h). Other pay types ignore it.
+  /// [units] is 0.5 or 1 for 時給 and 月給 workers, and any 0.1 step (min
+  /// 0.1) up to [maxUnitsPerRecord] for 日当 (a 外注 crew). [hours] is the
+  /// working time of an hourly worker (0.5〜24h). Other pay types ignore it.
   Future<void> setRecord({
     required String workerId,
     required DateTime day,
@@ -531,7 +535,7 @@ class AppController extends ChangeNotifier {
       existing?.id,
       base.copyWith(
         siteId: siteId,
-        units: units,
+        units: roundUnits(units),
         overtimeHours: overtimeHours,
         hours: workHours,
         shift: shift,
@@ -544,17 +548,23 @@ class AppController extends ChangeNotifier {
   }
 
   void _checkUnits(double units, PayType payType) {
+    final rounded = roundUnits(units);
+    if ((units - rounded).abs() > 1e-6) {
+      if (payType != PayType.daily) {
+        throw const InvalidInput('人工は1か0.5を選んでください。');
+      }
+      throw const InvalidInput('人工は0.1単位で入力してください。');
+    }
     if (payType != PayType.daily) {
-      if (units != 1 && units != 0.5) {
+      if (rounded != 1 && rounded != 0.5) {
         throw const InvalidInput('人工は1か0.5を選んでください。');
       }
       return;
     }
-    final steps = units * 2;
-    if (units <= 0 || steps != steps.roundToDouble()) {
-      throw const InvalidInput('人工は0.5単位で入力してください。');
+    if (rounded < dailyUnitStep) {
+      throw const InvalidInput('人工は0.1単位で入力してください。');
     }
-    if (units > maxUnitsPerRecord) {
+    if (rounded > maxUnitsPerRecord) {
       throw InvalidInput('人工は${formatUnits(maxUnitsPerRecord)}までです。');
     }
   }

@@ -6,7 +6,9 @@ import 'purchase_gateway.dart';
 /// simulator otherwise talks to the US sandbox storefront. Never buys.
 class ScreenshotPurchaseGateway implements PurchaseGateway {
   @override
-  Future<void> start(Future<void> Function(PurchaseEvent event) onEvent) async {}
+  Future<void> start(
+    Future<void> Function(PurchaseEvent event) onEvent,
+  ) async {}
 
   @override
   Future<List<StoreProduct>> loadProducts() async => const [
