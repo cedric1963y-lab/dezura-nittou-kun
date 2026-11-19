@@ -90,7 +90,7 @@ void main() {
           final saved = jsonDecode(
             File(p.join(directory.path, 'records.json')).readAsStringSync(),
           );
-          expect(saved['version'], 3);
+          expect(saved['version'], Repository.listSchemaVersion);
           c.dispose();
           final again = await openController(directory, premium: true);
           expect(again.records.length, 3);
@@ -124,7 +124,7 @@ void main() {
     );
 
     test('unknown future version is rejected', () async {
-      write('records.json', {'version': 4, 'records': []});
+      write('records.json', {'version': 5, 'records': []});
       await expectLater(
         Repository(directory).loadRecords(),
         throwsA(isA<FormatException>()),

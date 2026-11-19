@@ -46,6 +46,13 @@ class _RecordSheetState extends State<_RecordSheet> {
   Shift _shift = Shift.day;
   bool _ready = false;
   bool _existing = false;
+  bool _showAllowance = false;
+  bool _showTransport = false;
+  bool _showParking = false;
+  final _allowanceYen = TextEditingController();
+  final _allowanceMemo = TextEditingController();
+  final _transportYen = TextEditingController();
+  final _parkingYen = TextEditingController();
 
   @override
   void didChangeDependencies() {
@@ -61,6 +68,19 @@ class _RecordSheetState extends State<_RecordSheet> {
       _shift = record.shift;
       _overtime = record.overtimeHours;
       if (record.hours > 0) _hours = record.hours;
+      if (record.allowance > 0 || record.allowanceMemo.isNotEmpty) {
+        _showAllowance = true;
+        _allowanceYen.text = '${record.allowance}';
+        _allowanceMemo.text = record.allowanceMemo;
+      }
+      if (record.transport > 0) {
+        _showTransport = true;
+        _transportYen.text = '${record.transport}';
+      }
+      if (record.parking > 0) {
+        _showParking = true;
+        _parkingYen.text = '${record.parking}';
+      }
     } else {
       // Another entry on a day that already has one: suggest the other half
       // of the day, the other shift and another 現場.
@@ -87,6 +107,30 @@ class _RecordSheetState extends State<_RecordSheet> {
   }
 
   @override
+  void dispose() {
+    _allowanceYen.dispose();
+    _allowanceMemo.dispose();
+    _transportYen.dispose();
+    _parkingYen.dispose();
+    super.dispose();
+  }
+
+  int get _allowance {
+    if (!_showAllowance) return 0;
+    return parseYen(_allowanceYen.text) ?? 0;
+  }
+
+  int get _transport {
+    if (!_showTransport) return 0;
+    return parseYen(_transportYen.text) ?? 0;
+  }
+
+  int get _parking {
+    if (!_showParking) return 0;
+    return parseYen(_parkingYen.text) ?? 0;
+  }
+
+  @override
   Widget build(BuildContext context) {
     final controller = AppScope.of(context);
     final id = widget.recordId;
@@ -97,12 +141,20 @@ class _RecordSheetState extends State<_RecordSheet> {
     final contractor = widget.worker.kind == WorkerKind.contractor;
     final payType = base.payType;
     final overtimeRate = base.overtimeRate;
-    final amount = base
-        .copyWith(units: _units, overtimeHours: _overtime, hours: _hours)
-        .amount;
+    final selectedSite = [
+      for (final s in controller.sites)
+        if (s.id == _siteId) s,
+    ].firstOrNull;
+    final isArea = selectedSite?.isAreaSite == true;
+    final wage = isArea
+        ? 0
+        : base
+              .copyWith(units: _units, overtimeHours: _overtime, hours: _hours)
+              .amount;
+    final amount = wage + _allowance + _transport + _parking;
 
     return SafeArea(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(
           20,
           0,
@@ -130,7 +182,7 @@ class _RecordSheetState extends State<_RecordSheet> {
               children: [
                 for (final site in controller.sites)
                   ChoiceChip(
-                    label: Text(site.name),
+                    label: Text(site.isAreaSite ? '${site.name}（平米）' : site.name),
                     selected: site.id == _siteId,
                     onSelected: (_) => setState(() => _siteId = site.id),
                   ),
@@ -259,6 +311,7 @@ class _RecordSheetState extends State<_RecordSheet> {
                 ],
               ),
             ],
+            if (!isArea) ...[
             const SizedBox(height: 16),
             Row(
               children: [
@@ -303,32 +356,165 @@ class _RecordSheetState extends State<_RecordSheet> {
                   style: TextStyle(color: AppColors.muted, fontSize: 12),
                 ),
               ),
-            const SizedBox(height: 14),
-            Panel(
-              color: AppColors.paper,
-              child: Row(
-                children: [
-                  Text(payType == PayType.monthly ? 'この日の残業代' : 'この日の金額'),
-                  const Spacer(),
-                  Text(
-                    formatYen(amount),
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.navy,
+            ],
+            if (!isArea) ...[
+              const SizedBox(height: 14),
+              Panel(
+                color: AppColors.paper,
+                child: Row(
+                  children: [
+                    Text(payType == PayType.monthly ? 'この日の残業代' : 'この日の金額'),
+                    const Spacer(),
+                    Text(
+                      formatYen(amount),
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.navy,
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-            if (payType == PayType.monthly)
-              const Padding(
-                padding: EdgeInsets.only(top: 4),
-                child: Text(
-                  '月給の職人は出勤だけを記録します。月給は集計で月に1回計上します。',
-                  style: TextStyle(color: AppColors.muted, fontSize: 12),
+                  ],
                 ),
               ),
+              if (payType == PayType.monthly)
+                const Padding(
+                  padding: EdgeInsets.only(top: 4),
+                  child: Text(
+                    '月給の職人は出勤だけを記録します。月給は集計で月に1回計上します。',
+                    style: TextStyle(color: AppColors.muted, fontSize: 12),
+                  ),
+                ),
+            ] else
+              const Padding(
+                padding: EdgeInsets.only(top: 14),
+                child: Text(
+                  'この現場は平米割りです。日当は付きません。分けた金額は、現場の集計月に出ます。',
+                  key: Key('area-site-note'),
+                  style: TextStyle(color: AppColors.muted, fontSize: 13, height: 1.4),
+                ),
+              ),
+            const SizedBox(height: 12),
+            if (!_showAllowance)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  key: const Key('allowance-add'),
+                  onPressed: () => setState(() => _showAllowance = true),
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('＋色付け'),
+                ),
+              )
+            else ...[
+              const Text('色付け', style: TextStyle(fontWeight: FontWeight.w800)),
+              const SizedBox(height: 6),
+              TextField(
+                key: const Key('allowance-yen'),
+                controller: _allowanceYen,
+                keyboardType: TextInputType.number,
+                onChanged: (_) => setState(() {}),
+                decoration: const InputDecoration(
+                  labelText: '金額',
+                  hintText: '例: 3000',
+                  suffixText: '円',
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                key: const Key('allowance-memo'),
+                controller: _allowanceMemo,
+                maxLength: 40,
+                decoration: const InputDecoration(
+                  labelText: 'メモ（任意）',
+                  hintText: '例: 搬入が大変だった',
+                  counterText: '',
+                ),
+              ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  key: const Key('allowance-clear'),
+                  onPressed: () => setState(() {
+                    _showAllowance = false;
+                    _allowanceYen.clear();
+                    _allowanceMemo.clear();
+                  }),
+                  child: const Text('色付けをやめる'),
+                ),
+              ),
+            ],
+            const SizedBox(height: 4),
+            if (!_showTransport)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  key: const Key('transport-add'),
+                  onPressed: () => setState(() => _showTransport = true),
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('＋交通費'),
+                ),
+              )
+            else ...[
+              const Text('交通費', style: TextStyle(fontWeight: FontWeight.w800)),
+              const SizedBox(height: 6),
+              TextField(
+                key: const Key('transport-yen'),
+                controller: _transportYen,
+                keyboardType: TextInputType.number,
+                onChanged: (_) => setState(() {}),
+                decoration: const InputDecoration(
+                  labelText: '金額',
+                  hintText: '例: 800',
+                  suffixText: '円',
+                ),
+              ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  key: const Key('transport-clear'),
+                  onPressed: () => setState(() {
+                    _showTransport = false;
+                    _transportYen.clear();
+                  }),
+                  child: const Text('交通費をやめる'),
+                ),
+              ),
+            ],
+            if (!_showParking)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  key: const Key('parking-add'),
+                  onPressed: () => setState(() => _showParking = true),
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('＋駐車場代'),
+                ),
+              )
+            else ...[
+              const Text('駐車場代', style: TextStyle(fontWeight: FontWeight.w800)),
+              const SizedBox(height: 6),
+              TextField(
+                key: const Key('parking-yen'),
+                controller: _parkingYen,
+                keyboardType: TextInputType.number,
+                onChanged: (_) => setState(() {}),
+                decoration: const InputDecoration(
+                  labelText: '金額',
+                  hintText: '例: 1500',
+                  suffixText: '円',
+                ),
+              ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  key: const Key('parking-clear'),
+                  onPressed: () => setState(() {
+                    _showParking = false;
+                    _parkingYen.clear();
+                  }),
+                  child: const Text('駐車場代をやめる'),
+                ),
+              ),
+            ],
             const SizedBox(height: 14),
             FilledButton(
               key: const Key('save-record'),
@@ -344,8 +530,14 @@ class _RecordSheetState extends State<_RecordSheet> {
                           day: widget.day,
                           siteId: _siteId!,
                           units: _units,
-                          overtimeHours: _overtime,
+                          overtimeHours: isArea ? 0 : _overtime,
                           hours: payType == PayType.hourly ? _hours : null,
+                          allowance: _allowance,
+                          allowanceMemo: _showAllowance
+                              ? _allowanceMemo.text
+                              : '',
+                          transport: _transport,
+                          parking: _parking,
                         ),
                       );
                       if (ok) {

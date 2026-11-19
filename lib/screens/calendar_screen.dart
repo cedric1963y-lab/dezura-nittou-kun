@@ -432,7 +432,16 @@ class _SitePicker extends StatelessWidget {
                   if (draft == null || !context.mounted) return;
                   await guard(
                     context,
-                    () => c.addSite(name: draft.name, note: draft.note),
+                    () => c.addSite(
+                    name: draft.name,
+                    note: draft.note,
+                    isAreaSite: draft.isAreaSite,
+                    areaAmountMode: draft.areaAmountMode,
+                    areaSqm: draft.areaSqm,
+                    areaUnitPrice: draft.areaUnitPrice,
+                    contractAmount: draft.contractAmount,
+                    settlementMonth: draft.settlementMonth,
+                  ),
                   );
                 },
               ),
@@ -681,7 +690,16 @@ class _SetupCard extends StatelessWidget {
                 if (draft == null || !context.mounted) return;
                 await guard(
                   context,
-                  () => controller.addSite(name: draft.name, note: draft.note),
+                  () => controller.addSite(
+                    name: draft.name,
+                    note: draft.note,
+                    isAreaSite: draft.isAreaSite,
+                    areaAmountMode: draft.areaAmountMode,
+                    areaSqm: draft.areaSqm,
+                    areaUnitPrice: draft.areaUnitPrice,
+                    contractAmount: draft.contractAmount,
+                    settlementMonth: draft.settlementMonth,
+                  ),
                 );
               },
               icon: const Icon(Icons.apartment),

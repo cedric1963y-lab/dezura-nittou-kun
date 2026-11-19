@@ -4,11 +4,39 @@ import '../app_scope.dart';
 import '../format.dart';
 import '../plan/limits.dart';
 import '../services/links.dart';
+import '../services/toolbox.dart';
 import '../theme.dart';
 import '../widgets/dialogs.dart';
 
-class SettingsScreen extends StatelessWidget {
-  const SettingsScreen({super.key});
+class SettingsScreen extends StatefulWidget {
+  const SettingsScreen({this.scrollToToolbox = false, super.key});
+
+  /// Debug screenshot hook. Production leaves this false.
+  final bool scrollToToolbox;
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  final _toolboxKey = GlobalKey();
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.scrollToToolbox) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final ctx = _toolboxKey.currentContext;
+        if (ctx != null) {
+          Scrollable.ensureVisible(
+            ctx,
+            duration: Duration.zero,
+            alignment: 0.05,
+          );
+        }
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -59,6 +87,37 @@ class SettingsScreen extends StatelessWidget {
               ),
               trailing: const Icon(Icons.edit_outlined),
               onTap: () => _editBusinessName(context),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Panel(
+            key: _toolboxKey,
+            padding: EdgeInsets.zero,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(14, 14, 14, 6),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '職人の道具箱',
+                        style: TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        '同じ現場仕事のためのアプリです。',
+                        style: TextStyle(color: AppColors.muted, fontSize: 13),
+                      ),
+                    ],
+                  ),
+                ),
+                for (final app in ConstructionApps.others) ...[
+                  const Divider(height: 1),
+                  _StoreAppTile(app: app),
+                ],
+              ],
             ),
           ),
           const SizedBox(height: 10),
@@ -154,6 +213,26 @@ class _LinkTile extends StatelessWidget {
       trailing: const Icon(Icons.open_in_new, size: 20),
       onTap: () async {
         final ok = await openExternal(url);
+        if (!ok && context.mounted) showSnack(context, 'ページを開けませんでした。');
+      },
+    );
+  }
+}
+
+class _StoreAppTile extends StatelessWidget {
+  const _StoreAppTile({required this.app});
+
+  final ConstructionApp app;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      key: Key('toolbox-${app.id}'),
+      title: Text(app.name),
+      subtitle: Text(app.blurb),
+      trailing: const Icon(Icons.open_in_new, size: 20),
+      onTap: () async {
+        final ok = await openExternal(app.storeUrl);
         if (!ok && context.mounted) showSnack(context, 'ページを開けませんでした。');
       },
     );

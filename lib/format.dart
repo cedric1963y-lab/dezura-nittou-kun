@@ -106,6 +106,20 @@ String exportFileName(DateTime month, String extension) {
   return '出面日当_${month.year}年$m月.$extension';
 }
 
+/// Personal 出面 PDF, for example `出面日当_2026年10月_山田太郎.pdf`.
+String exportWorkerFileName(
+  DateTime month,
+  String workerName,
+  String extension,
+) {
+  final m = month.month.toString().padLeft(2, '0');
+  final safe = workerName
+      .replaceAll(RegExp(r'[\\/:*?"<>|]'), '')
+      .replaceAll(RegExp(r'\s+'), '');
+  final name = safe.isEmpty ? '職人' : safe;
+  return '出面日当_${month.year}年$m月_$name.$extension';
+}
+
 /// Parses `18,000` / `１８０００` / `18000円` into yen. Null when empty.
 int? parseYen(String input) {
   final normalized = input

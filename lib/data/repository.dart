@@ -15,13 +15,16 @@ class Repository {
 
   static const _encoder = JsonEncoder.withIndent('  ');
 
-  /// Version written to workers.json and records.json. 2 adds the pay type
-  /// (日当・時給・月給). 3 (1.0.6) adds a record id and 昼/夜勤 to records and
-  /// 従業員/外注 to workers. Version 1 and 2 files are still read: a missing
-  /// pay type means 日当, a missing kind 従業員, a missing shift 昼, and a
-  /// missing record id becomes `workerId@day`.
-  static const listSchemaVersion = 3;
-  static const _readableVersions = {1, 2, 3};
+  /// Version written to workers.json, sites.json and records.json.
+  /// 2 adds the pay type (日当・時給・月給). 3 (1.0.6) adds a record id and
+  /// 昼/夜勤 to records and 従業員/外注 to workers. 4 (1.0.7) adds 平米の現場
+  /// fields on sites and 色付け, 交通費 and 駐車場代 on records. Older
+  /// files are still read: a missing pay type means 日当, a missing kind
+  /// 従業員, a missing shift 昼, a missing record id becomes
+  /// `workerId@day`, a missing 平米 flag is off, and a missing 色付け・
+  /// 交通費・駐車場代 is 0.
+  static const listSchemaVersion = 4;
+  static const _readableVersions = {1, 2, 3, 4};
 
   String get exportDirectory => p.join(root.path, 'exports');
 
