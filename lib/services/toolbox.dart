@@ -24,6 +24,12 @@ abstract final class ConstructionApps {
     blurb: '工事の見積書・請求書を作る',
   );
 
+  static const koutei = ConstructionApp(
+    id: 6836845198, // 工事の工程表
+    name: '工事の工程表',
+    blurb: '現場の工程を帯で見て、雨の順延もまとめてずらす',
+  );
+
   static const shashinNippo = ConstructionApp(
     id: 6820176592,
     name: '写真日報くん',
@@ -48,9 +54,10 @@ abstract final class ConstructionApps {
     blurb: '塗料・生コンの面積を計算する',
   );
 
-  /// The other five construction apps, 見積 first for the 月末集計 prompt.
+  /// The other construction apps, 見積 first for the 月末集計 prompt.
   static const others = [
     mitsumori,
+    koutei,
     shashinNippo,
     shokocho,
     zaiseki,

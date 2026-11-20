@@ -559,15 +559,20 @@ void main() {
       expect(pubspec, contains('version: ${AppInfo.version}'));
     });
 
-    test('職人の道具箱 lists the other five construction apps, 見積 first', () {
-      expect(ConstructionApps.others.length, 5);
+    test('職人の道具箱 lists the other construction apps, 見積 first then 工程表', () {
+      expect(ConstructionApps.others.length, 6);
       expect(ConstructionApps.others.first, ConstructionApps.mitsumori);
+      expect(ConstructionApps.others[1], ConstructionApps.koutei);
       expect(ConstructionApps.mitsumori.id, 6820367399);
+      expect(ConstructionApps.koutei.id, 6836845198);
+      expect(ConstructionApps.koutei.name, '工事の工程表');
+      expect(ConstructionApps.koutei.blurb, '現場の工程を帯で見て、雨の順延もまとめてずらす');
+      expect(ConstructionApps.koutei.storeUrl, 'https://apps.apple.com/jp/app/id6836845198');
       expect(ConstructionApps.shashinNippo.id, 6820176592);
       expect(ConstructionApps.shokocho.id, 6819914622);
       expect(ConstructionApps.zaiseki.id, 6816288691);
       expect(ConstructionApps.nurimenseki.id, 6813789213);
-      expect(ConstructionApps.others.map((a) => a.id).toSet().length, 5);
+      expect(ConstructionApps.others.map((a) => a.id).toSet().length, 6);
       expect(ConstructionApps.others.any((a) => a.id == 6820335056), isFalse);
     });
   });
@@ -614,6 +619,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('職人の道具箱'), findsOneWidget);
     expect(find.text('かんたん見積・請求くん'), findsOneWidget);
+    expect(find.text('工事の工程表'), findsOneWidget);
+    expect(find.text('現場の工程を帯で見て、雨の順延もまとめてずらす'), findsOneWidget);
+    expect(find.byKey(const Key('toolbox-6836845198')), findsOneWidget);
     expect(find.text('写真日報くん'), findsOneWidget);
     expect(find.text('仕事の証拠帳'), findsOneWidget);
     expect(find.text('現場材積くん'), findsOneWidget);
