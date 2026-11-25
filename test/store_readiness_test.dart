@@ -37,8 +37,8 @@ void main() {
     expect(store, contains(PlanLimits.subscriptionGroupName));
     expect(store, contains('"recurringSubscriptionPeriod" : "P1M"'));
     expect(store, contains('"recurringSubscriptionPeriod" : "P1Y"'));
-    expect(store, contains('"displayPrice" : "100"'));
-    expect(store, contains('"displayPrice" : "1200"'));
+    expect(store, contains('"displayPrice" : "300"'));
+    expect(store, contains('"displayPrice" : "3000"'));
     final scheme = File(
       'ios/Runner.xcodeproj/xcshareddata/xcschemes/Runner.xcscheme',
     ).readAsStringSync();

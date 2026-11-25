@@ -7,6 +7,7 @@ import '../plan/limits.dart';
 import '../services/links.dart';
 import '../state/app_controller.dart';
 import '../theme.dart';
+import '../widgets/restore.dart';
 
 class PremiumScreen extends StatefulWidget {
   const PremiumScreen({this.reason, super.key});
@@ -87,7 +88,25 @@ class _PremiumScreenState extends State<PremiumScreen> {
         controller.productsLoaded && (!monthlyReady || !yearlyReady);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('プレミアム')),
+      appBar: AppBar(
+        title: const Text('プレミアム'),
+        actions: [
+          TextButton(
+            key: const Key('restore-appbar'),
+            onPressed: pending
+                ? null
+                : () => restorePurchasesAndShowResult(context),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.white,
+              disabledForegroundColor: Colors.white70,
+            ),
+            child: const Text(
+              '復元',
+              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+            ),
+          ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 18, 20, 32),
         children: [
@@ -232,7 +251,9 @@ class _PremiumScreenState extends State<PremiumScreen> {
             children: [
               TextButton(
                 key: const Key('restore'),
-                onPressed: pending ? null : controller.restorePremium,
+                onPressed: pending
+                    ? null
+                    : () => restorePurchasesAndShowResult(context),
                 child: const Text('購入を復元'),
               ),
               TextButton(

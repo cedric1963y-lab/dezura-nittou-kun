@@ -18,6 +18,8 @@ import '../services/purchase_gateway.dart';
 
 enum PurchasePhase { idle, pending, error }
 
+enum RestoreResult { restored, nothingToRestore, failed }
+
 class AppController extends ChangeNotifier {
   AppController({
     required this.repository,
@@ -927,8 +929,10 @@ class AppController extends ChangeNotifier {
     }
   }
 
-  Future<void> restorePremium() async {
-    if (purchasePhase == PurchasePhase.pending) return;
+  Future<RestoreResult> restorePremium() async {
+    if (purchasePhase == PurchasePhase.pending) {
+      return RestoreResult.failed;
+    }
     purchasePhase = PurchasePhase.pending;
     purchaseError = null;
     notifyListeners();
@@ -936,20 +940,36 @@ class AppController extends ChangeNotifier {
     try {
       await purchases.restore();
       await Future<void>.delayed(const Duration(milliseconds: 1500));
-      if (purchasePhase == PurchasePhase.pending && !premium && !already) {
+      if (premium) {
+        purchasePhase = PurchasePhase.idle;
+        purchaseError = null;
+        notifyListeners();
+        return RestoreResult.restored;
+      }
+      if (purchasePhase == PurchasePhase.error) {
+        notifyListeners();
+        return RestoreResult.failed;
+      }
+      if (!already) {
         purchasePhase = PurchasePhase.error;
         purchaseError = '復元できる契約は見つかりませんでした。契約したApple IDでサインインしているか確認してください。';
-      } else if (purchasePhase == PurchasePhase.pending) {
-        purchasePhase = PurchasePhase.idle;
+        notifyListeners();
+        return RestoreResult.nothingToRestore;
       }
+      purchasePhase = PurchasePhase.idle;
+      notifyListeners();
+      return RestoreResult.nothingToRestore;
     } on StoreUnavailable catch (error) {
       purchasePhase = PurchasePhase.error;
       purchaseError = error.message;
+      notifyListeners();
+      return RestoreResult.failed;
     } catch (_) {
       purchasePhase = PurchasePhase.error;
       purchaseError = '復元できませんでした。通信状況を確認してください。';
+      notifyListeners();
+      return RestoreResult.failed;
     }
-    notifyListeners();
   }
 
   Future<void> _onPurchase(PurchaseEvent event) async {

@@ -129,7 +129,8 @@ void main() {
     );
     expect(find.text('¥3,000'), findsOneWidget);
     expect(find.textContaining('自動更新され'), findsOneWidget);
-    expect(find.text('購入を復元'), findsOneWidget);
+    expect(find.byKey(const Key('restore')), findsOneWidget);
+    expect(find.byKey(const Key('restore-appbar')), findsOneWidget);
     expect(find.text('利用規約（EULA）'), findsOneWidget);
     expect(find.text('プライバシーポリシー'), findsOneWidget);
     controller.dispose();
