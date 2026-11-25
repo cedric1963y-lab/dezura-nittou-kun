@@ -5,6 +5,7 @@ import '../errors.dart';
 import '../format.dart';
 import '../plan/limits.dart';
 import '../services/links.dart';
+import '../services/review_prompt.dart';
 import '../state/app_controller.dart';
 import '../theme.dart';
 import '../widgets/restore.dart';
@@ -38,6 +39,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
   @override
   void initState() {
     super.initState();
+    ReviewPrompt.enterPaywall();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) AppScope.of(context).refreshProduct();
     });
@@ -56,6 +58,7 @@ class _PremiumScreenState extends State<PremiumScreen> {
 
   @override
   void dispose() {
+    ReviewPrompt.leavePaywall();
     _controller?.removeListener(_onChange);
     super.dispose();
   }

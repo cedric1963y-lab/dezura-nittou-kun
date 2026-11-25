@@ -6,6 +6,7 @@ import '../format.dart';
 import '../models/records.dart';
 import '../logic/summary.dart';
 import '../services/links.dart';
+import '../services/review_prompt.dart';
 import '../services/share_service.dart';
 import '../services/toolbox.dart';
 import '../state/app_controller.dart';
@@ -214,14 +215,17 @@ class _SummaryScreenState extends State<SummaryScreen> {
       Builder(
         builder: (buttonContext) => FilledButton.icon(
           key: const Key('share-text'),
-          onPressed: () => guard(context, () async {
-            final text = controller.textFor(summary.month);
-            await shareText(
-              text,
-              subject: '出面・日当 ${formatMonth(summary.month)}',
-              origin: shareOriginOf(buttonContext),
-            );
-          }),
+          onPressed: () =>
+              guard(context, () async {
+                final text = controller.textFor(summary.month);
+                await shareText(
+                  text,
+                  subject: '出面・日当 ${formatMonth(summary.month)}',
+                  origin: shareOriginOf(buttonContext),
+                );
+              }).then((ok) {
+                if (ok) ReviewPrompt.onMonthEndSuccess();
+              }),
           icon: const Icon(Icons.chat_bubble_outline),
           label: const Text('LINEなどにテキストで送る'),
         ),
@@ -299,25 +303,28 @@ class _WorkerList extends StatelessWidget {
                   ],
                   amount: w.amount,
                   shareKey: Key('share-worker-${w.worker.id}'),
-                  onShare: () => guard(buttonContext, () async {
-                    final controller = AppScope.of(buttonContext);
-                    final origin = shareOriginOf(buttonContext);
-                    final path = await controller.exportWorkerPdf(
-                      month,
-                      w.worker.id,
-                    );
-                    await shareFile(
-                      path: path,
-                      fileName: exportWorkerFileName(
-                        month,
-                        w.worker.name,
-                        'pdf',
-                      ),
-                      mimeType: 'application/pdf',
-                      subject: '${w.worker.name} ${formatMonth(month)}の出面',
-                      origin: origin,
-                    );
-                  }),
+                  onShare: () =>
+                      guard(buttonContext, () async {
+                        final controller = AppScope.of(buttonContext);
+                        final origin = shareOriginOf(buttonContext);
+                        final path = await controller.exportWorkerPdf(
+                          month,
+                          w.worker.id,
+                        );
+                        await shareFile(
+                          path: path,
+                          fileName: exportWorkerFileName(
+                            month,
+                            w.worker.name,
+                            'pdf',
+                          ),
+                          mimeType: 'application/pdf',
+                          subject: '${w.worker.name} ${formatMonth(month)}の出面',
+                          origin: origin,
+                        );
+                      }).then((ok) {
+                        if (ok) ReviewPrompt.onMonthEndSuccess();
+                      }),
                 );
               },
             ),

@@ -5,7 +5,6 @@ import '../errors.dart';
 import '../format.dart';
 import '../models/records.dart';
 import '../plan/limits.dart';
-import '../services/review_prompt.dart';
 import '../state/app_controller.dart';
 import '../theme.dart';
 import '../widgets/dialogs.dart';
@@ -156,10 +155,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                       return;
                     }
                     guard(context, () async {
-                      final next = await controller.tapWorker(worker.id, day);
-                      if (next != null) {
-                        ReviewPrompt.afterEntry(controller.records.length);
-                      }
+                      await controller.tapWorker(worker.id, day);
                     });
                   },
                   onEdit: (recordId) => showRecordSheet(
@@ -180,9 +176,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
                     key: const Key('mark-all'),
                     onPressed: () => guard(context, () async {
                       final added = await controller.markAll(day);
-                      if (added > 0) {
-                        ReviewPrompt.afterEntry(controller.records.length);
-                      }
                       if (!context.mounted) return;
                       showSnack(
                         context,

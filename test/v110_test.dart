@@ -27,10 +27,10 @@ void main() {
     if (await directory.exists()) await directory.delete(recursive: true);
   });
 
-  test('version is 1.0.10+14 and StoreKit test prices match the store', () {
-    expect(AppInfo.version, '1.0.10');
+  test('version is 1.0.11+15 and StoreKit test prices match the store', () {
+    expect(AppInfo.version, '1.0.11');
     final pubspec = File('pubspec.yaml').readAsStringSync();
-    expect(pubspec, contains('version: 1.0.10+14'));
+    expect(pubspec, contains('version: 1.0.11+15'));
     final storekit = File('ios/Runner/Products.storekit').readAsStringSync();
     expect(storekit, contains('"displayPrice" : "300"'));
     expect(storekit, contains('"displayPrice" : "3000"'));

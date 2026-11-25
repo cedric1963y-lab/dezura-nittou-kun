@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'app_shell.dart';
 import 'data/repository.dart';
 import 'plan/limits.dart';
+import 'services/review_prompt.dart';
 import 'services/screenshot_purchase_gateway.dart';
 import 'services/store_purchase_gateway.dart';
 import 'state/app_controller.dart';
@@ -59,6 +60,8 @@ class _BootAppState extends State<BootApp> {
         demoPremium: kDebugMode && _screenshot && _screenshotPremium,
       );
       await controller.load();
+      ReviewPrompt.attach(directory: repository.root);
+      ReviewPrompt.recordUsage();
       if (!mounted) {
         controller.dispose();
         return;

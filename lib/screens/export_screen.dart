@@ -6,6 +6,7 @@ import 'package:printing/printing.dart';
 import '../app_scope.dart';
 import '../errors.dart';
 import '../format.dart';
+import '../services/review_prompt.dart';
 import '../services/share_service.dart';
 import '../theme.dart';
 import '../widgets/dialogs.dart';
@@ -99,17 +100,20 @@ class _ExportScreenState extends State<ExportScreen> {
                 child: Builder(
                   builder: (buttonContext) => FilledButton.icon(
                     key: const Key('share-pdf'),
-                    onPressed: () => guard(context, () async {
-                      final origin = shareOriginOf(buttonContext);
-                      final path = await controller.exportPdf(widget.month);
-                      await shareFile(
-                        path: path,
-                        fileName: exportFileName(widget.month, 'pdf'),
-                        mimeType: 'application/pdf',
-                        subject: '出面表 ${formatMonth(widget.month)}',
-                        origin: origin,
-                      );
-                    }),
+                    onPressed: () =>
+                        guard(context, () async {
+                          final origin = shareOriginOf(buttonContext);
+                          final path = await controller.exportPdf(widget.month);
+                          await shareFile(
+                            path: path,
+                            fileName: exportFileName(widget.month, 'pdf'),
+                            mimeType: 'application/pdf',
+                            subject: '出面表 ${formatMonth(widget.month)}',
+                            origin: origin,
+                          );
+                        }).then((ok) {
+                          if (ok) ReviewPrompt.onMonthEndSuccess();
+                        }),
                     icon: Icon(premium ? Icons.ios_share : Icons.lock_outline),
                     label: const Text('PDFを送る'),
                   ),
@@ -120,17 +124,20 @@ class _ExportScreenState extends State<ExportScreen> {
                 child: Builder(
                   builder: (buttonContext) => OutlinedButton.icon(
                     key: const Key('share-csv'),
-                    onPressed: () => guard(context, () async {
-                      final origin = shareOriginOf(buttonContext);
-                      final path = await controller.exportCsv(widget.month);
-                      await shareFile(
-                        path: path,
-                        fileName: exportFileName(widget.month, 'csv'),
-                        mimeType: 'text/csv',
-                        subject: '出面 ${formatMonth(widget.month)}',
-                        origin: origin,
-                      );
-                    }),
+                    onPressed: () =>
+                        guard(context, () async {
+                          final origin = shareOriginOf(buttonContext);
+                          final path = await controller.exportCsv(widget.month);
+                          await shareFile(
+                            path: path,
+                            fileName: exportFileName(widget.month, 'csv'),
+                            mimeType: 'text/csv',
+                            subject: '出面 ${formatMonth(widget.month)}',
+                            origin: origin,
+                          );
+                        }).then((ok) {
+                          if (ok) ReviewPrompt.onMonthEndSuccess();
+                        }),
                     icon: Icon(premium ? Icons.table_view : Icons.lock_outline),
                     label: const Text('CSV'),
                   ),
@@ -162,14 +169,17 @@ class _ExportScreenState extends State<ExportScreen> {
           const SizedBox(height: 12),
           Builder(
             builder: (buttonContext) => FilledButton.icon(
-              onPressed: () => guard(
-                context,
-                () => shareText(
-                  text,
-                  subject: '出面・日当 ${formatMonth(widget.month)}',
-                  origin: shareOriginOf(buttonContext),
-                ),
-              ),
+              onPressed: () =>
+                  guard(
+                    context,
+                    () => shareText(
+                      text,
+                      subject: '出面・日当 ${formatMonth(widget.month)}',
+                      origin: shareOriginOf(buttonContext),
+                    ),
+                  ).then((ok) {
+                    if (ok) ReviewPrompt.onMonthEndSuccess();
+                  }),
               icon: const Icon(Icons.chat_bubble_outline),
               label: const Text('テキストを送る'),
             ),
