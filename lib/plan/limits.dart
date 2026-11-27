@@ -76,7 +76,7 @@ abstract final class PlanLimits {
 
 abstract final class AppInfo {
   static const name = '出面・日当くん';
-  static const version = '1.0.11';
+  static const version = '1.0.13';
   static const tagline = '出面をタップで付けて、日当を月末に集計。';
 }
 

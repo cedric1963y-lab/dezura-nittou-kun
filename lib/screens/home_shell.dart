@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../app_scope.dart';
+import '../plan/trial_tip.dart';
 import '../services/review_prompt.dart';
 import '../format.dart';
 import '../models/records.dart';
@@ -47,6 +50,9 @@ class _HomeShellState extends State<HomeShell> {
   @override
   void initState() {
     super.initState();
+    if (widget.startTab < 10) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShowTrialTip());
+    }
     if (widget.startTab >= 10) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
@@ -125,6 +131,32 @@ class _HomeShellState extends State<HomeShell> {
         }
       });
     }
+  }
+
+  /// Free-trial users get one short tip, once. A quiet snack bar, no push.
+  void _maybeShowTrialTip() {
+    if (!mounted) return;
+    final controller = AppScope.of(context);
+    if (!controller.shouldShowTrialTip) return;
+    unawaited(controller.markTrialTipShown());
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      SnackBar(
+        content: const Text(TrialTip.message),
+        duration: const Duration(seconds: 9),
+        behavior: SnackBarBehavior.floating,
+        action: SnackBarAction(
+          label: '見てみる',
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => ExportScreen(
+                month: DateTime(controller.now.year, controller.now.month),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   @override

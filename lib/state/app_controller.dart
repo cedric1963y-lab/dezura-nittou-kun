@@ -12,6 +12,7 @@ import '../models/plans.dart';
 import '../models/records.dart';
 import '../services/plan_image.dart';
 import '../plan/entitlement.dart';
+import '../plan/trial_tip.dart';
 import '../plan/limits.dart';
 import '../services/pdf_report.dart';
 import '../services/purchase_gateway.dart';
@@ -97,6 +98,7 @@ class AppController extends ChangeNotifier {
     _selectedSiteId = selected is String ? selected : null;
     final business = settings['businessName'];
     businessName = business is String ? business : '';
+    trialTipShown = settings['trialTipShown'] == true;
     try {
       await purchases.start(_onPurchase);
       await _applyStoreSubscriptions();
@@ -112,7 +114,11 @@ class AppController extends ChangeNotifier {
     final active = activeSubscription(found, _now());
     entitlement = active == null
         ? const Entitlement()
-        : Entitlement(productId: active.productId, expiresAt: active.expiresAt);
+        : Entitlement(
+            productId: active.productId,
+            expiresAt: active.expiresAt,
+            purchasedAt: active.purchasedAt,
+          );
     await repository.saveEntitlement(entitlement);
   }
 
@@ -120,7 +126,27 @@ class AppController extends ChangeNotifier {
     return repository.saveSettings({
       'selectedSiteId': ?_selectedSiteId,
       'businessName': businessName,
+      if (trialTipShown) 'trialTipShown': true,
     });
+  }
+
+  /// The one-time tip for people in the free trial was already shown.
+  bool trialTipShown = false;
+
+  bool get shouldShowTrialTip => TrialTip.shouldShow(
+    entitlement: entitlement,
+    now: _now(),
+    alreadyShown: trialTipShown,
+  );
+
+  Future<void> markTrialTipShown() async {
+    if (trialTipShown) return;
+    trialTipShown = true;
+    try {
+      await _saveSettings();
+    } catch (_) {
+      // A missed save at worst shows the tip once more; never block the app.
+    }
   }
 
   // ---------------------------------------------------------------- lookups
