@@ -99,6 +99,15 @@ class AppController extends ChangeNotifier {
     final business = settings['businessName'];
     businessName = business is String ? business : '';
     trialTipShown = settings['trialTipShown'] == true;
+    guideSeen = settings['guideSeen'] == true;
+    if (!guideSeen && hasExistingData) {
+      guideSeen = true;
+      try {
+        await _saveSettings();
+      } catch (_) {
+        // Existing users should never see the first-launch guide.
+      }
+    }
     try {
       await purchases.start(_onPurchase);
       await _applyStoreSubscriptions();
@@ -127,11 +136,34 @@ class AppController extends ChangeNotifier {
       'selectedSiteId': ?_selectedSiteId,
       'businessName': businessName,
       if (trialTipShown) 'trialTipShown': true,
+      if (guideSeen) 'guideSeen': true,
     });
   }
 
   /// The one-time tip for people in the free trial was already shown.
   bool trialTipShown = false;
+
+  /// True once the first-launch guide was shown, skipped, or skipped because
+  /// this is an existing user who already has data.
+  bool guideSeen = false;
+
+  bool get hasExistingData =>
+      workers.isNotEmpty ||
+      sites.isNotEmpty ||
+      records.isNotEmpty ||
+      plans.isNotEmpty;
+
+  bool get shouldShowGuide => !guideSeen;
+
+  Future<void> markGuideSeen() async {
+    if (guideSeen) return;
+    guideSeen = true;
+    try {
+      await _saveSettings();
+    } catch (_) {
+      // The guide is only a convenience; never block the app on it.
+    }
+  }
 
   bool get shouldShowTrialTip => TrialTip.shouldShow(
     entitlement: entitlement,

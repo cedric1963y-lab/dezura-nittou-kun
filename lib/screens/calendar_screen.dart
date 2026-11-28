@@ -8,6 +8,7 @@ import '../plan/limits.dart';
 import '../state/app_controller.dart';
 import '../theme.dart';
 import '../widgets/dialogs.dart';
+import '../widgets/help_button.dart';
 import 'plan_screen.dart';
 import 'record_sheet.dart';
 
@@ -70,6 +71,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
       appBar: AppBar(
         title: const Text(AppInfo.name),
         actions: [
+          const HelpButton(key: Key('help-calendar'), text: HelpTexts.calendar),
           TextButton(
             onPressed: () => _goToday(controller),
             style: TextButton.styleFrom(foregroundColor: Colors.white),

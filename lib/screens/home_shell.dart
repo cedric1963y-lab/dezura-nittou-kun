@@ -8,6 +8,7 @@ import '../services/review_prompt.dart';
 import '../format.dart';
 import '../models/records.dart';
 import 'calendar_screen.dart';
+import 'guide_screen.dart';
 import 'record_sheet.dart';
 import 'export_screen.dart';
 import 'premium_screen.dart';
@@ -25,7 +26,7 @@ class HomeShell extends StatefulWidget {
   /// 11 (プレミアム), 12 (平米の現場の編集), 13 (職人の道具箱), 14 (色付け),
   /// 15 (交通費・駐車場代), 16 (個人明細PDF), 17 (現場の住所編集),
   /// 18 (人工のチップ), 19 (住所つき集計), 20 (住所つき個人明細PDF),
-  /// 21 (明日の予定), 22 (予定の画像).
+  /// 21 (明日の予定), 22 (予定の画像), 23-25 (guide page 1-3).
   final int startTab;
 
   @override
@@ -51,7 +52,7 @@ class _HomeShellState extends State<HomeShell> {
   void initState() {
     super.initState();
     if (widget.startTab < 10) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShowTrialTip());
+      WidgetsBinding.instance.addPostFrameCallback((_) => _showGuideOrTip());
     }
     if (widget.startTab >= 10) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -128,9 +129,37 @@ class _HomeShellState extends State<HomeShell> {
                   PlanScreen(initialDay: day, openImage: widget.startTab == 22),
             ),
           );
+          return;
+        }
+        if (widget.startTab >= 23 && widget.startTab <= 25) {
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              fullscreenDialog: true,
+              builder: (_) => GuideScreen(initialPage: widget.startTab - 23),
+            ),
+          );
         }
       });
     }
+  }
+
+  /// First-launch guide for brand-new users, otherwise the one-time trial tip.
+  /// Never both in the same session. Existing users (who already have data)
+  /// skip the guide.
+  Future<void> _showGuideOrTip() async {
+    if (!mounted) return;
+    final controller = AppScope.of(context);
+    if (controller.shouldShowGuide) {
+      unawaited(controller.markGuideSeen());
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          fullscreenDialog: true,
+          builder: (_) => const GuideScreen(),
+        ),
+      );
+      return;
+    }
+    _maybeShowTrialTip();
   }
 
   /// Free-trial users get one short tip, once. A quiet snack bar, no push.

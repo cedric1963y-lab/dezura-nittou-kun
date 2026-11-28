@@ -9,6 +9,7 @@ import '../services/links.dart';
 import '../state/app_controller.dart';
 import '../theme.dart';
 import '../widgets/dialogs.dart';
+import '../widgets/help_button.dart';
 
 enum _RosterTab { workers, sites }
 
@@ -49,7 +50,12 @@ class _RosterScreenState extends State<RosterScreen> {
     final controller = AppScope.of(context);
     final workersTab = _tab == _RosterTab.workers;
     return Scaffold(
-      appBar: AppBar(title: const Text('名簿')),
+      appBar: AppBar(
+        title: const Text('名簿'),
+        actions: const [
+          HelpButton(key: Key('help-roster'), text: HelpTexts.roster),
+        ],
+      ),
       floatingActionButton: FloatingActionButton.extended(
         key: const Key('roster-add'),
         onPressed: () =>

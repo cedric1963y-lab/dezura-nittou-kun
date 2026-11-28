@@ -12,6 +12,7 @@ import '../services/toolbox.dart';
 import '../state/app_controller.dart';
 import '../theme.dart';
 import '../widgets/dialogs.dart';
+import '../widgets/help_button.dart';
 import 'export_screen.dart';
 
 class SummaryScreen extends StatefulWidget {
@@ -68,7 +69,12 @@ class _SummaryScreenState extends State<SummaryScreen> {
     final atCurrentMonth = isSameMonth(month, controller.now);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('集計')),
+      appBar: AppBar(
+        title: const Text('集計'),
+        actions: const [
+          HelpButton(key: Key('help-summary'), text: HelpTexts.summary),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(14, 8, 14, 28),
         cacheExtent: widget.scrollToSites ? 8000 : null,

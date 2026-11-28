@@ -60,10 +60,10 @@ void main() {
   }
 
   group('version and prices', () {
-    test('AppInfo and pubspec are 1.0.13+17, fallback prices are new', () {
-      expect(AppInfo.version, '1.0.13');
+    test('AppInfo and pubspec are 1.0.14+18, fallback prices are new', () {
+      expect(AppInfo.version, '1.0.14');
       final pubspec = File('pubspec.yaml').readAsStringSync();
-      expect(pubspec, contains('version: 1.0.13+17'));
+      expect(pubspec, contains('version: 1.0.14+18'));
       expect(PlanLimits.monthlyPriceYen, 300);
       expect(PlanLimits.yearlyPriceYen, 3000);
       expect(PlanLimits.monthlyPriceLabel, '¥300');

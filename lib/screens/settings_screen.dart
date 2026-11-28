@@ -8,6 +8,8 @@ import '../services/links.dart';
 import '../services/toolbox.dart';
 import '../theme.dart';
 import '../widgets/dialogs.dart';
+import '../widgets/help_button.dart';
+import 'guide_screen.dart';
 import '../widgets/restore.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -51,7 +53,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
         : '無料・職人 ${controller.workers.length}/${PlanLimits.freeWorkerLimit}・現場 ${controller.sites.length}/${PlanLimits.freeSiteLimit}';
 
     return Scaffold(
-      appBar: AppBar(title: const Text('設定')),
+      appBar: AppBar(
+        title: const Text('設定'),
+        actions: const [
+          HelpButton(key: Key('help-settings'), text: HelpTexts.settings),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(14, 14, 14, 32),
         children: [
@@ -137,6 +144,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   _StoreAppTile(app: app),
                 ],
               ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          Panel(
+            padding: EdgeInsets.zero,
+            child: ListTile(
+              key: const Key('open-guide'),
+              leading: const Icon(
+                Icons.menu_book_outlined,
+                color: AppColors.amber,
+              ),
+              title: const Text(
+                '使い方ガイドをもう一度見る',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  fullscreenDialog: true,
+                  builder: (_) => const GuideScreen(),
+                ),
+              ),
             ),
           ),
           const SizedBox(height: 10),
